@@ -1,0 +1,10 @@
+{
+  "code": "b1",
+  "title": "B1 — Company basics",
+  "fields": [
+    { "id": "company",     "label": "Company name",   "type": "text"   },
+    { "id": "employees",   "label": "Employees",      "type": "number" },
+    { "id": "energy_kwh",  "label": "Energy (kWh)",   "type": "number" },
+    { "id": "notes",       "label": "Notes",          "type": "textarea" }
+  ]
+}
