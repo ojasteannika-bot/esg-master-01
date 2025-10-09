@@ -3,16 +3,40 @@ on:
   push:
     branches: [ "main" ]
   pull_request:
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20.x
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
-      - run: cp .env.example .env.local || true
-      - run: npm ci
-      # Ajutiselt ignoreerime TS/ESLint buildifaasis (parandame koos B1 viiluga)
-      - run: NEXT_TS_IGNORE_BUILD_ERRORS=1 NEXT_DISABLE_ESLINT=1 npm run build
+
+      - name: Env
+        run: |
+          node -v
+          npm -v
+          echo "Lockfile present?"; test -f package-lock.json && echo YES || echo NO
+          cp .env.example .env.local || true
+
+      # Kui on lockfile -> npm ci, vastasel juhul npm install
+      - name: Install deps
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install --no-audit --no-fund
+          fi
+
+      - name: List top deps
+        run: npm ls --depth=0 || true
+
+      - name: Build (TS/ESLint ajutiselt ignoreeritud)
+        run: |
+          npx next --version || true
+          NEXT_TS_IGNORE_BUILD_ERRORS=1 NEXT_DISABLE_ESLINT=1 npm run build
