@@ -1,39 +1,29 @@
-import Link from 'next/link';
-import { listSections } from '@/data/vsme';
+// src/app/questionnaires/vsme/layout.tsx
 import React from 'react';
+import Link from 'next/link';
+import ProjectPicker from '@/components/ProjectPicker';
 
-export default function VsmeLayout({
-  children,
-  params,
-}: {
-  children: React.ReactNode;
-  params: { code?: string };
-}) {
-  const sections = listSections(); // ['a','b','b1'] koos tiitlitega
-  const active = params?.code;     // Parent-layout saab alamsegmendi parameetri
-
+export default function VsmeLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid grid-cols-[220px_1fr] gap-6">
-      <aside className="space-y-2">
-        <div className="mb-3 text-sm font-semibold text-slate-500">Sections</div>
-        <nav className="space-y-1">
-          {sections.map((s) => (
-            <Link
-              key={s.code}
-              href={`/questionnaires/vsme/${s.code}`}
-              className={[
-                'block rounded-xl border px-3 py-2',
-                active === s.code ? 'bg-emerald-50 border-emerald-200' : 'bg-white hover:bg-slate-50',
-              ].join(' ')}
-            >
-              <div className="font-medium">{s.title}</div>
-              {s.subtitle && <div className="text-xs text-slate-500">{s.subtitle}</div>}
-            </Link>
-          ))}
-        </nav>
-      </aside>
+    <div className="min-h-screen">
+      {/* Kohalik tööriistariba – paneme siia ProjectPickeri igaks juhuks */}
+      <div className="border-b">
+        <div className="container mx-auto flex items-center justify-between p-3">
+          <div className="flex items-center gap-4">
+            <Link href="/" className="font-semibold">ESG-MASTER-01</Link>
+            <nav className="hidden sm:flex items-center gap-3 text-sm text-slate-600">
+              <Link href="/questionnaires">Questionnaires</Link>
+              <Link href="/questionnaires/vsme/nodes">VSME sections</Link>
+            </nav>
+          </div>
+          <div className="shrink-0">
+            <ProjectPicker />
+          </div>
+        </div>
+      </div>
 
-      <main>{children}</main>
+      {/* Page content with side menu (existing design left “Sections” etc – kui sul on selline) */}
+      <div>{children}</div>
     </div>
   );
 }

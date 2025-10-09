@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '../../../../lib/supabase/client';
+import { createClient } from '@supabase/supabase-js';
+
+function admin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  return createClient(url, key, { auth: { persistSession: false } });
+}
 
 export async function GET(req: Request) {
   try {
@@ -14,10 +20,10 @@ export async function GET(req: Request) {
       );
     }
 
-    const supabase = createClient();
+    const supabase = admin();
     const { data, error } = await supabase
       .from('cdm_records')
-      .select('cdm,draft')
+      .select('cdm, draft')
       .eq('project_id', projectId)
       .eq('section_code', sectionCode)
       .maybeSingle();
@@ -26,6 +32,9 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ ok: true, data: data ?? null });
   } catch (err: any) {
-    return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: String(err?.message ?? err) },
+      { status: 500 }
+    );
   }
 }

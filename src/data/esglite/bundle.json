@@ -1,0 +1,46 @@
+{
+  "sections": [
+    {
+      "code": "B1",
+      "title": "Basis for preparation",
+      "items": [
+        {
+          "code": "B1-1",
+          "title": "Which VSME modules are included?",
+          "fields": [
+            { "id": "included_modules", "label": "Included modules", "type": "select", "options": ["Basic", "Comprehensive", "Both"] },
+            { "id": "notes", "label": "Notes", "type": "textarea" }
+          ]
+        },
+        {
+          "code": "B1-2",
+          "title": "Individual or consolidated?",
+          "fields": [
+            { "id": "basis", "label": "Basis", "type": "select", "options": ["Individual", "Consolidated"] },
+            { "id": "notes", "label": "Notes", "type": "textarea" }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "B2",
+      "title": "Practices & initiatives",
+      "items": [
+        { "code": "B2-1", "title": "Policy statement", "fields": [
+          { "id": "policy_text", "label": "Policy text", "type": "textarea" },
+          { "id": "effective_from", "label": "Effective from", "type": "date" }
+        ] }
+      ]
+    },
+    {
+      "code": "B3",
+      "title": "Energy & GHG",
+      "items": [
+        { "code": "B3-1", "title": "Energy use", "fields": [
+          { "id": "energy_mwh", "label": "Energy (MWh)", "type": "number" },
+          { "id": "notes", "label": "Notes", "type": "textarea" }
+        ] }
+      ]
+    }
+  ]
+}

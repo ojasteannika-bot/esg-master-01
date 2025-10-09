@@ -1,49 +1,34 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { getProjectId, setProjectId, onProjectChange } from '@/lib/project';
-
-const presets = ['demo-project-01', 'client-XYZ', 'client-ABC'];
+import React, { useEffect, useState } from 'react';
+import { getProjectId, setProjectId, onProjectChange } from '../lib/project';
 
 export default function ProjectPicker() {
-  const [value, setValue] = useState(getProjectId());
+  const [value, setValue] = useState('');
 
   useEffect(() => {
-    // Kui projekt muutus mujalt, uuenda inputit
+    setValue(getProjectId());
     return onProjectChange((id) => setValue(id));
   }, []);
 
-  function apply(v: string) {
+  function onChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const v = e.target.value;
     setValue(v);
     setProjectId(v);
   }
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-sm text-slate-600">Project:</span>
+      <label htmlFor="projectInput" className="text-sm text-slate-500">
+        Project:
+      </label>
       <input
-        className="rounded-lg border px-2 py-1"
+        id="projectInput"
+        className="border rounded px-2 py-1 min-w-[14rem]"
+        placeholder="demo-project-01"
         value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={() => apply(value.trim() || 'demo-project-01')}
-        placeholder="client-XYZ"
-        aria-label="Project id"
+        onChange={onChange}
       />
-      <select
-        className="rounded-lg border px-2 py-1"
-        value=""
-        onChange={(e) => apply(e.target.value)}
-        aria-label="Pick preset"
-      >
-        <option value="" disabled>
-          presets…
-        </option>
-        {presets.map((p) => (
-          <option key={p} value={p}>
-            {p}
-          </option>
-        ))}
-      </select>
     </div>
   );
 }

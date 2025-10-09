@@ -1,10 +1,23 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '../../../../lib/supabase/client';
+import { createClient } from '@supabase/supabase-js';
+
+function admin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+type Body = {
+  projectId: string;
+  sectionCode: string;
+  draft?: any;
+  cdm?: any;
+};
 
 export async function POST(req: Request) {
   try {
-    const payload = await req.json().catch(() => ({}));
-    const { projectId, sectionCode, draft, cdm } = payload || {};
+    const body = (await req.json()) as Body;
+    const { projectId, sectionCode, draft, cdm } = body;
 
     if (!projectId || !sectionCode) {
       return NextResponse.json(
@@ -12,41 +25,37 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    if (!draft && !cdm) {
-      return NextResponse.json(
-        { ok: false, error: 'Nothing to save (provide draft or cdm)' },
-        { status: 400 }
-      );
-    }
 
-    const supabase = createClient();
-    const now = new Date().toISOString();
+    const supabase = admin();
 
-    // loe olemasolev
-    const { data: existing, error: readErr } = await supabase
-      .from('cdm_records')
-      .select('cdm,draft')
-      .eq('project_id', projectId)
-      .eq('section_code', sectionCode)
-      .maybeSingle();
-    if (readErr) throw readErr;
+    // upsert CDM/draft
+    const { error } = await supabase.from('cdm_records').upsert(
+      {
+        project_id: projectId,
+        section_code: sectionCode,
+        cdm: cdm ?? null,
+        draft: draft ?? null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'project_id,section_code' }
+    );
 
-    const newRow = {
+    if (error) throw error;
+
+    // audit (serverist)
+    await supabase.from('audit_entries').insert({
       project_id: projectId,
-      section_code: sectionCode,
-      cdm: cdm ?? existing?.cdm ?? null,
-      draft: draft ?? existing?.draft ?? null,
-      updated_at: now,
-    };
+      ts: new Date().toISOString(),
+      type: 'save',
+      ctx: `vsme:${sectionCode}`,
+      data: { mode: cdm ? 'final' : 'draft' },
+    });
 
-    const { error: upsertErr } = await supabase
-      .from('cdm_records')
-      .upsert(newRow, { onConflict: 'project_id,section_code' });
-
-    if (upsertErr) throw upsertErr;
-
-    return NextResponse.json({ ok: true, data: newRow });
+    return NextResponse.json({ ok: true });
   } catch (err: any) {
-    return NextResponse.json({ ok: false, error: String(err?.message || err) }, { status: 500 });
+    return NextResponse.json(
+      { ok: false, error: String(err?.message ?? err) },
+      { status: 500 }
+    );
   }
 }

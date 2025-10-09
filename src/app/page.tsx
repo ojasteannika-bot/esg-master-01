@@ -1,57 +1,61 @@
-import Link from "next/link";
-import PageShell from "@/components/PageShell";
-import Card from "@/components/Card";
-import Button from "@/components/Button";
-import Stat from "@/components/Stat";
+'use client';
 
-export default function Page() {
+import Link from 'next/link';
+import * as React from 'react';
+
+export default function HomePage() {
+  const [project, setProject] = React.useState('client-test1');
+
+  React.useEffect(() => {
+    try {
+      const v = localStorage.getItem('project:id');
+      if (v) setProject(v);
+    } catch {/* ignore */}
+  }, []);
+
   return (
-    <PageShell title="ESG-MASTER-01">
-      {/* Banner */}
-      <Card className="bg-brand-500 text-white p-4">
-        <div className="text-sm">Tailwind OK — ready for UI</div>
-      </Card>
-
-      {/* KPIs */}
-      <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Score" value="74%" hint="prototype" />
-        <Stat label="Emissions" value="129 tCO₂e" hint="Scope 1" />
-        <Stat label="Energy" value="82,837 kWh" />
-        <Stat label="Suppliers" value={12} />
+    <div className="mx-auto max-w-3xl space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">ESG-MASTER-01</h1>
+        <p className="mt-1 text-sm text-gray-600">
+          ESGLITE-01 prototype. Choose a module to continue.
+        </p>
+        <div className="mt-2 text-xs text-gray-500">Active project: <span className="font-medium">{project}</span></div>
       </div>
 
-      {/* Actions */}
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <Card className="p-5">
-          <div className="text-slate-900 font-medium">Quick wizard</div>
-          <p className="mt-1 text-sm text-slate-600">
-            Start with VSME sections A/B/B1
-          </p>
-          <Link href="/wizard" className="inline-block mt-4">
-            <Button>Open wizard</Button>
-          </Link>
-        </Card>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Link
+          href={`/esglite?project=${encodeURIComponent(project)}`}
+          className="rounded-lg border p-4 hover:bg-gray-50"
+        >
+          <div className="text-sm font-medium">ESGLITE Dashboard</div>
+          <div className="text-xs text-gray-600">Overall progress, filters, section cards</div>
+        </Link>
 
-        <Card className="p-5">
-          <div className="text-slate-900 font-medium">Preview / PDF</div>
-          <p className="mt-1 text-sm text-slate-600">
-            Generate a draft report
-          </p>
-          <Link href="/preview" className="inline-block mt-4">
-            <Button variant="ghost">Open preview</Button>
-          </Link>
-        </Card>
+        <Link
+          href={`/questionnaires/esglite/nodes?project=${encodeURIComponent(project)}`}
+          className="rounded-lg border p-4 hover:bg-gray-50"
+        >
+          <div className="text-sm font-medium">Disclosures</div>
+          <div className="text-xs text-gray-600">All sections &amp; items</div>
+        </Link>
 
-        <Card className="p-5">
-          <div className="text-slate-900 font-medium">Audit trail</div>
-          <p className="mt-1 text-sm text-slate-600">
-            Track changes & events
-          </p>
-          <Link href="/audit" className="inline-block mt-4">
-            <Button variant="ghost">View log</Button>
-          </Link>
-        </Card>
+        <Link
+          href={`/audit?project=${encodeURIComponent(project)}`}
+          className="rounded-lg border p-4 hover:bg-gray-50"
+        >
+          <div className="text-sm font-medium">Audit log</div>
+          <div className="text-xs text-gray-600">Recent activity</div>
+        </Link>
+
+        <Link
+          href={`/wizard`}
+          className="rounded-lg border p-4 hover:bg-gray-50"
+        >
+          <div className="text-sm font-medium">Wizard</div>
+          <div className="text-xs text-gray-600">Quick setup flow</div>
+        </Link>
       </div>
-    </PageShell>
+    </div>
   );
 }

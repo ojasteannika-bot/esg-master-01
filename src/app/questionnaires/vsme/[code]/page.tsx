@@ -1,186 +1,101 @@
-'use client';
-import { useEffect, useMemo, useState } from 'react';
+// src/app/questionnaires/vsme/[code]/page.tsx
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { safeGetSectionWithItems } from '@/lib/vsme/schema.server';
 
-type B1 = {
-  suppliers?: number | string;
-  water?: number | string;
-  waste?: number | string;
-  target_year?: number | string;
-  notes?: string;
+export const dynamic = 'force-dynamic';
+
+type PageProps = {
+  params: { code: string };            // nt "B1"
+  searchParams: { project?: string };
 };
 
-const PROJECT_ID = 'demo-project-01';
-const SECTION_CODE = 'b1';
+async function getProgress(project: string, section: string) {
+  // Serveri fetch vajab ABSOLUTE URL-i.
+  // Pane .env.local faili: NEXT_PUBLIC_APP_URL=http://localhost:3001
+  const base =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    'http://localhost:3001';
 
-export default function VsmeB1Page() {
-  const [form, setForm] = useState<B1>({});
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState<'draft' | 'final' | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
-
-  // kui see leht on dünaamilise route’iga, näitame pealkirja koodist
-  const title = useMemo(() => `Section ${SECTION_CODE.toUpperCase()} (dynamic)`, []);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
-        const url = `/api/cdm/get?projectId=${encodeURIComponent(PROJECT_ID)}&sectionCode=${encodeURIComponent(SECTION_CODE)}`;
-        const res = await fetch(url, { cache: 'no-store' });
-        // kui server vastab mitte-JSON-iga (nt HTML vealeht), väldi .json() crash’i
-        const text = await res.text();
-        try {
-          const json = JSON.parse(text);
-          if (json?.ok && json?.data) {
-            const initial = json.data.draft ?? json.data.cdm ?? {};
-            setForm(initial);
-          }
-        } catch {
-          console.warn('Non-JSON response from /api/cdm/get:', text.slice(0, 200));
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
-
-  const onChange =
-    (key: keyof B1) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      setForm((prev) => ({ ...prev, [key]: e.target.value }));
+  try {
+    const url = new URL('/api/vsme/progress', base);
+    url.searchParams.set('project', project);
+    url.searchParams.set('section', section);
+    const res = await fetch(url.toString(), { cache: 'no-store' });
+    if (!res.ok) throw new Error(String(res.status));
+    const json = await res.json();
+    return {
+      completed: Number(json.completed ?? 0),
+      total: Number(json.total ?? 0),
     };
-
-  async function logAudit(kind: 'save_draft' | 'save_final') {
-    try {
-      await fetch('/api/audit/log', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectId: PROJECT_ID,
-          type: kind,
-          ctx: `questionnaires:${SECTION_CODE}`,
-          data: form,
-          ts: new Date().toISOString(),
-        }),
-      });
-    } catch (e) {
-      console.warn('audit log failed', e);
-    }
+  } catch {
+    // Fallback: kui API pole valmis, näita 0/total
+    const { items } = await safeGetSectionWithItems(section);
+    return { completed: 0, total: items.length };
   }
+}
 
-  async function save(kind: 'draft' | 'final') {
-    try {
-      setSaving(kind);
-      setMessage(null);
-      const body =
-        kind === 'draft'
-          ? { projectId: PROJECT_ID, sectionCode: SECTION_CODE, draft: form }
-          : { projectId: PROJECT_ID, sectionCode: SECTION_CODE, cdm: form };
+export default async function Page({ params, searchParams }: PageProps) {
+  const sectionCode = (params.code || '').toUpperCase(); // "B1"
+  const project = searchParams.project || '';
 
-      const res = await fetch('/api/cdm/upsert', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+  const { section, items } = await safeGetSectionWithItems(sectionCode);
+  if (!section) return notFound();
 
-      const text = await res.text();
-      let ok = false;
-      try {
-        const json = JSON.parse(text);
-        ok = !!json?.ok;
-      } catch {
-        console.warn('Non-JSON response from /api/cdm/upsert:', text.slice(0, 200));
-      }
-
-      if (ok) {
-        setMessage(kind === 'draft' ? 'Draft saved' : 'Final saved');
-        await logAudit(kind === 'draft' ? 'save_draft' : 'save_final');
-      } else {
-        setMessage('Save failed');
-      }
-    } catch (e) {
-      console.error(e);
-      setMessage('Save failed');
-    } finally {
-      setSaving(null);
-      setTimeout(() => setMessage(null), 3000);
-    }
-  }
+  const { completed, total } = await getProgress(project, sectionCode);
+  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">{title}</h1>
+    <div className="mx-auto max-w-6xl p-6">
+      <div className="mb-2 text-sm text-gray-500">
+        Questionnaires / VSME sections / <span className="text-gray-900">{section.code}</span>
+      </div>
 
-      {loading && <div className="text-slate-500">Loading…</div>}
-      {message && <div className="rounded-lg bg-emerald-50 text-emerald-700 px-3 py-2 w-fit">{message}</div>}
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">{section.title}</h1>
+          <div className="mt-1 text-sm text-gray-500">Project: <span className="font-medium">{project || '—'}</span></div>
+        </div>
+        <div className="rounded-lg border p-3 text-center">
+          <div className="text-2xl font-semibold">{pct}%</div>
+          <div className="text-xs text-gray-500">
+            Final {completed} / Total {total}
+          </div>
+        </div>
+      </div>
 
-      <label className="block">
-        <span>Suppliers (count)</span>
-        <input
-          className="w-full border rounded-xl p-2"
-          inputMode="numeric"
-          value={form.suppliers ?? ''}
-          onChange={onChange('suppliers')}
-        />
-      </label>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {items.map((it) => (
+          <div key={it.code} className="rounded-lg border p-4">
+            <div className="mb-1 text-xs text-gray-500">Code: {it.code}</div>
+            <div className="mb-2 font-medium">{it.title}</div>
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/questionnaires/vsme/item/${it.code}?project=${encodeURIComponent(project)}`}
+                className="inline-flex items-center rounded-md bg-gray-900 px-3 py-1.5 text-sm text-white hover:bg-black"
+              >
+                Open
+              </Link>
+              <span className="text-xs text-gray-400">generic view WIP</span>
+            </div>
+          </div>
+        ))}
 
-      <label className="block">
-        <span>Water (m³/year)</span>
-        <input
-          className="w-full border rounded-xl p-2"
-          inputMode="numeric"
-          value={form.water ?? ''}
-          onChange={onChange('water')}
-        />
-      </label>
+        {items.length === 0 && (
+          <div className="rounded-md border p-4 text-sm text-gray-600">
+            No disclosure requirements in this section yet.
+          </div>
+        )}
+      </div>
 
-      <label className="block">
-        <span>Waste (t/year)</span>
-        <input
-          className="w-full border rounded-xl p-2"
-          inputMode="numeric"
-          value={form.waste ?? ''}
-          onChange={onChange('waste')}
-        />
-      </label>
-
-      <label className="block">
-        <span>ESG target year</span>
-        <input
-          className="w-full border rounded-xl p-2"
-          inputMode="numeric"
-          value={form.target_year ?? ''}
-          onChange={onChange('target_year')}
-        />
-      </label>
-
-      <label className="block">
-        <span>Notes</span>
-        <textarea
-          className="w-full border rounded-xl p-2"
-          rows={4}
-          value={form.notes ?? ''}
-          onChange={onChange('notes')}
-        />
-      </label>
-
-      <div className="flex gap-3">
-        <button
-          onClick={() => save('draft')}
-          disabled={saving !== null}
-          className="px-4 py-2 rounded-lg bg-slate-900 text-white disabled:opacity-50"
+      <div className="mt-6">
+        <Link
+          href="/questionnaires/vsme/nodes?project=client-test1"
+          className="text-sm underline underline-offset-2"
         >
-          {saving === 'draft' ? 'Saving…' : 'Save draft'}
-        </button>
-        <button
-          onClick={() => save('final')}
-          disabled={saving !== null}
-          className="px-4 py-2 rounded-lg bg-emerald-600 text-white disabled:opacity-50"
-        >
-          {saving === 'final' ? 'Saving…' : 'Save final'}
-        </button>
+          All sections
+        </Link>
       </div>
     </div>
   );

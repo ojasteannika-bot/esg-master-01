@@ -1,28 +1,20 @@
-import { getProjectId } from './project';
+'use client';
 
-/** Väike helper – kui API /api/audit/add puudub, logime lihtsalt konsooli.
- *  Fail on oluline, et oleks NIMELT EKSPORDITUD logAudit (kompileerimisviga kaob).
- */
-export async function logAudit(
-  type: string,
-  ctx?: string,
-  data?: unknown
-) {
+export type AuditEntryInput = {
+  project_id: string;
+  type: string;   // 'save' | 'nav' | 'field' | 'test' | ...
+  ctx?: string;
+  data?: any;
+};
+
+export async function logAudit(input: AuditEntryInput) {
   try {
-    const projectId = getProjectId();
-    // proovi saata, aga kui API’t pole, siis ära rakendust katkesta
     await fetch('/api/audit/add', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        projectId,
-        ts: new Date().toISOString(),
-        type,
-        ctx,
-        data,
-      }),
-    }).catch(() => {});
+      body: JSON.stringify(input),
+    });
   } catch {
-    // no-op
+    // vaikne – audit ei tohi UX-i katkestada
   }
 }

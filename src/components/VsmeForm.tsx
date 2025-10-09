@@ -1,65 +1,81 @@
-'use client';
+'use client'
 
-import { useEffect, useState } from 'react';
-import type { VsmeSection, VsmeField } from '@/data/vsme';
-import { loadJSON, saveJSON } from '@/lib/storage';
-import { audit } from '@/lib/audit';
+import React from 'react'
+import QuestionHelp from './ai/QuestionHelp'
 
-type Props = { section: VsmeSection };
-type FormState = Record<string, string>;
+export type VsmeField = {
+  key: string
+  label: string
+  type: 'number' | 'text' | 'textarea'
+  placeholder?: string
+  suffix?: string
+  colSpan?: 6 | 12
+}
 
-export default function VsmeForm({ section }: Props) {
-  const storageKey = `vsme:${section.code}`;
-  const [form, setForm] = useState<FormState>(() => loadJSON<FormState>(storageKey, {}));
+export type VsmeSection = {
+  code: string
+  fields: VsmeField[]
+}
 
-  useEffect(() => {
-    saveJSON(storageKey, form);
-  }, [form, storageKey]);
+export default function VsmeForm(props: {
+  section: VsmeSection
+  value: Record<string, any>
+  onChange(v: Record<string, any>): void
+  disabled?: boolean
+}) {
+  const { section, value, onChange, disabled } = props
 
-  const handle =
-    (field: VsmeField) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-      const value = e.target.value;
-      setForm((prev) => ({ ...prev, [field.id]: value }));
-      audit({
-        ts: new Date().toISOString(),
-        type: 'field',
-        ctx: `vsme:${section.code}`,
-        data: { key: field.id, value }
-      });
-    };
-
-  const renderField = (f: VsmeField) => {
-    const val = form[f.id] ?? '';
-    const common = {
-      id: f.id,
-      name: f.id,
-      value: val,
-      onChange: handle(f),
-      className: 'w-full border rounded-xl p-2'
-    };
-    switch (f.type) {
-      case 'textarea':
-        return <textarea {...common} rows={5} />;
-      case 'number':
-      case 'text':
-      default:
-        return <input {...common} type={f.type === 'number' ? 'number' : 'text'} />;
-    }
-  };
+  const set = (k: string, v: any) => onChange({ ...value, [k]: v })
 
   return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-semibold">{section.title}</h2>
-      {section.fields.map((f) => (
-        <label key={f.id} className="block">
-          <div className="text-sm mb-1">{f.label}</div>
-          {renderField(f)}
-        </label>
-      ))}
-      <div className="text-xs text-slate-500">
-        Autosaved: <code>{storageKey}</code>
-      </div>
+    <div className="grid grid-cols-12 gap-4">
+      {section.fields.map((f) => {
+        const span = f.colSpan || 6
+        const common = (
+          <>
+            <label className="mb-1 flex items-center text-sm font-medium">
+              <span>{f.label}</span>
+              <QuestionHelp
+                sectionCode={section.code}
+                questionKey={f.key}
+                hint={`Help for ${section.code}/${f.key}: ${f.label}`}
+              />
+            </label>
+          </>
+        )
+
+        if (f.type === 'textarea') {
+          return (
+            <div key={f.key} className={`col-span-12`}>
+              {common}
+              <textarea
+                disabled={disabled}
+                className="h-28 w-full rounded border p-2 text-sm"
+                placeholder={f.placeholder}
+                value={value[f.key] ?? ''}
+                onChange={(e) => set(f.key, e.target.value)}
+              />
+            </div>
+          )
+        }
+
+        return (
+          <div key={f.key} className={`col-span-${span}`}>
+            {common}
+            <div className="flex">
+              <input
+                disabled={disabled}
+                type={f.type === 'number' ? 'number' : 'text'}
+                className="w-full rounded border p-2 text-sm"
+                placeholder={f.placeholder}
+                value={value[f.key] ?? ''}
+                onChange={(e) => set(f.key, f.type === 'number' ? Number(e.target.value) : e.target.value)}
+              />
+              {f.suffix && <span className="ml-2 self-center text-sm text-gray-500">{f.suffix}</span>}
+            </div>
+          </div>
+        )
+      })}
     </div>
-  );
+  )
 }

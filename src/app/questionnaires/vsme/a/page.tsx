@@ -1,103 +1,151 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { loadJSON, saveJSON } from '@/lib/storage';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import VsmeForm, { type VsmeSection } from '../../../../components/VsmeForm';
+import LoadingButton from '../../../../components/LoadingButton';
+import { getProjectId, onProjectChange } from '../../../../lib/project';
+import { logAudit } from '../../../../lib/audit';
+import { useDebouncedEffect } from '../../../../lib/useDebouncedEffect';
+import { toast } from '../../../../lib/toast';
 
-type FormA = {
-  company: string;
-  employees: string;
-  energy_kwh: string;
-  scope1: string;
-  ren_pct: string;
-  policy: '' | 'yes' | 'no';
+type AForm = {
+  legal_name?: string | null;
+  country?: string | null;
+  employees?: number | null;
+  sector?: string | null;
+  notes?: string | null;
 };
 
-const KEY = 'vsme:A';
+const SECTION_DEF: VsmeSection = {
+  code: 'a',
+  fields: [
+    { key: 'legal_name', label: 'Legal name', type: 'text', placeholder: 'e.g. Annika OÜ', colSpan: 12 },
+    { key: 'country', label: 'Country', type: 'text', placeholder: 'e.g. EE', colSpan: 6 },
+    { key: 'employees', label: 'Employees (FTE)', type: 'number', placeholder: 'e.g. 12', colSpan: 6 },
+    { key: 'sector', label: 'Sector', type: 'text', placeholder: 'e.g. Retail', colSpan: 12 },
+    { key: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Optional…', colSpan: 12 },
+  ],
+};
 
-export default function Page() {
-  const [form, setForm] = useState<FormA>(
-    loadJSON<FormA>(KEY, {
-      company: '',
-      employees: '',
-      energy_kwh: '',
-      scope1: '',
-      ren_pct: '',
-      policy: '',
-    })
-  );
+export default function APage() {
+  const [project, setProject] = useState<string>(getProjectId());
+  const [form, setForm] = useState<AForm>({});
+  const [busy, setBusy] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [autosave, setAutosave] = useState(true);
+  const dirtyRef = useRef(false);
+  const initialRef = useRef<string>(JSON.stringify(form));
+
+  useEffect(() => onProjectChange((id) => setProject(id)), []);
 
   useEffect(() => {
-    saveJSON(KEY, form);
-  }, [form]);
+    let cancelled = false;
+    (async () => {
+      try {
+        setBusy(true);
+        const u = new URL('/api/cdm/get', window.location.origin);
+        u.searchParams.set('projectId', project);
+        u.searchParams.set('sectionCode', SECTION_DEF.code);
+        const r = await fetch(u.toString(), { cache: 'no-store' });
+        const j = await r.json();
+        if (!cancelled && j?.ok) {
+          const next = j.data ?? {};
+          setForm(next);
+          initialRef.current = JSON.stringify(next);
+          dirtyRef.current = false;
+        }
+      } catch {} finally {
+        if (!cancelled) setBusy(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [project]);
 
-  const handle =
-    (key: keyof FormA) =>
-    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-      setForm((prev) => ({ ...prev, [key]: e.target.value }));
+  useEffect(() => {
+    const onLeave = (e: BeforeUnloadEvent) => {
+      if (dirtyRef.current) { e.preventDefault(); e.returnValue = ''; }
     };
+    window.addEventListener('beforeunload', onLeave);
+    return () => window.removeEventListener('beforeunload', onLeave);
+  }, []);
 
-  const score = useMemo(() => {
-    let s = 0;
-    if (Number(form.employees) >= 1) s += 10;
-    if (Number(form.energy_kwh) > 0) s += 20;
-    if (Number(form.scope1) >= 0) s += 20;
-    if (Number(form.ren_pct) > 0) s += 20;
-    if (form.policy === 'yes') s += 30;
-    return Math.min(100, s);
-  }, [form]);
+  function onFormChange(next: AForm, key?: string, value?: any) {
+    setForm(next);
+    dirtyRef.current = JSON.stringify(next) !== initialRef.current;
+    if (key) {
+      logAudit({ project_id: project, type: 'field', ctx: 'vsme:a', data: { key, value } })
+        .catch(() => {});
+    }
+  }
+
+  useDebouncedEffect(() => {
+    if (!autosave || !dirtyRef.current) return;
+    (async () => {
+      try {
+        const r = await fetch('/api/cdm/upsert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectId: project, sectionCode: 'a', draft: form }),
+        });
+        const j = await r.json();
+        if (j?.ok) {
+          initialRef.current = JSON.stringify(form);
+          dirtyRef.current = false;
+          setLastSavedAt(new Date().toISOString());
+          toast('Autosaved ✔', 'success', 1200);
+        }
+      } catch {}
+    })();
+  }, [form, project, autosave], 1200);
+
+  async function save(mode: 'draft' | 'final') {
+    try {
+      setBusy(true);
+      await logAudit({ project_id: project, type: 'save', ctx: 'vsme:a', data: { mode } });
+      const r = await fetch('/api/cdm/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: project,
+          sectionCode: 'a',
+          draft: mode === 'draft' ? form : undefined,
+          cdm: mode === 'final' ? form : undefined,
+        }),
+      });
+      const j = await r.json();
+      if (!j?.ok) throw new Error(j?.error || 'Save failed');
+      initialRef.current = JSON.stringify(form);
+      dirtyRef.current = false;
+      setLastSavedAt(new Date().toISOString());
+      toast(mode === 'final' ? 'Final saved ✔' : 'Draft saved ✔', 'success');
+    } catch (e: any) {
+      toast('Save failed: ' + (e?.message ?? 'error'), 'error');
+      await logAudit({ project_id: project, type: 'error', ctx: 'vsme:a', data: { message: String(e?.message || e) } });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const savedInfo = useMemo(() => lastSavedAt ? `Saved · ${new Date(lastSavedAt).toLocaleTimeString()}` : 'Not saved yet', [lastSavedAt]);
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Section A</h1>
-
-      <label className="block">Company name
-        <input className="w-full border rounded-xl p-2"
-               value={form.company} onChange={handle('company')} />
-      </label>
-
-      <label className="block">Employees
-        <input className="w-full border rounded-xl p-2"
-               value={form.employees} onChange={handle('employees')} />
-      </label>
-
-      <label className="block">Energy (kWh)
-        <input className="w-full border rounded-xl p-2"
-               value={form.energy_kwh} onChange={handle('energy_kwh')} />
-      </label>
-
-      <label className="block">Scope 1 (tCO₂e)
-        <input className="w-full border rounded-xl p-2"
-               value={form.scope1} onChange={handle('scope1')} />
-      </label>
-
-      <label className="block">Renewables %
-        <input className="w-full border rounded-xl p-2"
-               value={form.ren_pct} onChange={handle('ren_pct')} />
-      </label>
-
-      <label className="block">ESG policy in place?
-        <select className="w-full border rounded-xl p-2"
-                value={form.policy} onChange={handle('policy')}>
-          <option value="">—</option>
-          <option value="yes">Yes</option>
-          <option value="no">No</option>
-        </select>
-      </label>
-
-      <div className="mt-4">
-        <div className="h-2 bg-[#EEE] rounded-full overflow-hidden">
-          <div className="h-2 bg-[#3CBCA3]" style={{ width: `${score}%` }} />
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Section A</h1>
+        <div className="flex items-center gap-4">
+          <label className="text-sm inline-flex items-center gap-2">
+            <input type="checkbox" checked={autosave} onChange={(e) => setAutosave(e.target.checked)} />
+            Autosave
+          </label>
+          <span className="text-sm text-slate-600">{savedInfo}</span>
         </div>
-        <div className="text-sm mt-1">Score: {score}%</div>
       </div>
 
-      <div className="flex gap-2">
-        <Link href="/questionnaires"
-              className="px-3 py-2 rounded-xl border">← Back</Link>
-        <div className="flex-1" />
-        <Link href="/questionnaires/vsme/b"
-              className="px-3 py-2 rounded-xl bg-emerald-600 text-white">Next →</Link>
+      <VsmeForm section={SECTION_DEF} value={form} onChange={onFormChange} disabled={busy} />
+
+      <div className="mt-4 flex gap-3">
+        <LoadingButton variant="ghost" loading={busy} onClick={() => save('draft')}>Save draft</LoadingButton>
+        <LoadingButton variant="primary" loading={busy} onClick={() => save('final')}>Save final</LoadingButton>
       </div>
     </div>
   );
