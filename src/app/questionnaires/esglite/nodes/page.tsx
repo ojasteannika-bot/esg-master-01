@@ -5,7 +5,7 @@ export const revalidate = 0;
 import { Suspense } from 'react';
 
 function NodesInner() {
-  // NB! Kui vajad hiljem useSearchParams/useRouter/usePathname, tee seda siin sees.
+  // Kui vajad hiljem useSearchParams/useRouter/usePathname, tee seda siin sees.
   return (
     <main style={{ padding: 24 }}>
       <h1>Disclosures by section</h1>
