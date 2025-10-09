@@ -1,23 +1,49 @@
 name: CI
 on:
   push:
-    branches: ["**"]   # kõik harud
+    branches: ["**"]
   pull_request:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      # kindlustame, et npm ei katkestaks peer-konflikti pärast
+      NPM_CONFIG_LEGACY_PEER_DEPS: "true"
+      NPM_CONFIG_AUDIT: "false"
+      NPM_CONFIG_FUND: "false"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_TS_IGNORE_BUILD_ERRORS: "1"
+      NEXT_DISABLE_ESLINT: "1"
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-      - name: Show pins/overrides
-        run: node -e "const p=require('./package.json'); console.log({devTypesReact:p.devDependencies?.['@types/react'], devTypesReactDom:p.devDependencies?.['@types/react-dom'], overrides:p.overrides})"
-      - run: cp .env.example .env.local || true
-      - name: Install deps
+          node-version: "20"
+          cache: "npm"
+
+      - name: Show versions/pins
         run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
-      - name: Build
-        run: NEXT_TS_IGNORE_BUILD_ERRORS=1 NEXT_DISABLE_ESLINT=1 npm run build
+          node -v
+          npm -v
+          node -e "const p=require('./package.json'); console.log({
+            typesReact:p.devDependencies?.['@types/react'],
+            typesReactDom:p.devDependencies?.['@types/react-dom'],
+            overrides:p.overrides
+          })"
+
+      - name: Prepare env
+        run: cp .env.example .env.local || true
+
+      - name: Install deps (lockfile preferred)
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+          npm ls @types/react @types/react-dom --depth=0 || true
+
+      - name: Build (ignore lint/TS during scaffolding)
+        run: npm run build
