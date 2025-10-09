@@ -1,11 +1,16 @@
+# Node / Next.js
 node_modules/
 .next/
 out/
 dist/
+build/
 coverage/
-*.log
+.vscode/
 .DS_Store
-*.tsbuildinfo
-.env.local
-.env*.local
-# snapshots/  # (Jätame kommenteerituks, sest Sa tahad neid versiooni alla)
+.env
+.env.*
+.vercel/
+.turbo/
+pnpm-lock.yaml
+npm-debug.log*
+yarn-error.log*

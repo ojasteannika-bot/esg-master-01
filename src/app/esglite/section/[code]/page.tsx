@@ -1,35 +1,40 @@
 'use client';
 
+import React from 'react';
 import Link from 'next/link';
-import { useParams, useSearchParams, useRouter } from 'next/navigation';
-import * as React from 'react';
+import { useParams, useSearchParams } from 'next/navigation';
 
 type ItemRow = {
   code: string;
   title: string;
-  status?: 'final' | 'draft' | 'not_started';
+  status?: 'not_started' | 'draft' | 'final';
   updated_at?: string | null;
 };
 
-export default function EsSectionPage() {
+type SectionPayload = {
+  ok: boolean;
+  section?: { code: string; title: string } | null;
+  items?: ItemRow[];
+  error?: string;
+};
+
+type StatusKey = 'all' | 'not_started' | 'draft' | 'final';
+
+export default function SectionPage() {
   const params = useParams<{ code: string }>();
-  const sectionCode = (params?.code as string) ?? '';
   const search = useSearchParams();
   const project = search.get('project') ?? '';
-  const router = useRouter();
 
-  const [rows, setRows] = React.useState<ItemRow[]>([]);
-  const [progress, setProgress] = React.useState({
-    percent: 0,
-    final: 0,
-    draft: 0,
-    total: 0,
-  });
-  const [loading, setLoading] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [sectionTitle, setSectionTitle] = React.useState<string>('');
+  const [items, setItems] = React.useState<ItemRow[]>([]);
+
+  const [q, setQ] = React.useState('');
+  const [filter, setFilter] = React.useState<StatusKey>('all');
 
   React.useEffect(() => {
-    let abort = false;
+    let aborted = false;
 
     async function load() {
       setLoading(true);
@@ -37,165 +42,242 @@ export default function EsSectionPage() {
       try {
         const url = `/api/cdm/section?project=${encodeURIComponent(
           project
-        )}&code=${encodeURIComponent(sectionCode)}`;
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`${res.status}`);
-        const json = await res.json();
-        if (abort) return;
+        )}&code=${encodeURIComponent(params.code)}`;
+        const res = await fetch(url, { credentials: 'include' });
+        if (!res.ok) throw new Error(`load ${res.status}`);
+        const json: SectionPayload = await res.json();
+        if (aborted) return;
 
-        const items: ItemRow[] = (json?.items ?? []).map((it: any) => ({
-          code: it.code,
-          title: it.title ?? it.name ?? it.label ?? it.code,
-          status: (it.status ?? it.item?.status ?? 'not_started') as any,
-          updated_at: it.updated_at ?? it.item?.updated_at ?? null,
-        }));
-
-        setRows(items);
-        const pr = json?.progress ?? {};
-        setProgress({
-          percent: Number(pr.percent ?? 0),
-          final: Number(pr.final ?? 0),
-          draft: Number(pr.draft ?? 0),
-          total: Number(pr.total ?? items.length ?? 0),
-        });
+        if (!json.ok) throw new Error(json.error || 'load failed');
+        setSectionTitle(json.section?.title || params.code);
+        setItems(Array.isArray(json.items) ? json.items : []);
       } catch (e: any) {
-        if (!abort) setError(e?.message ?? 'load error');
+        if (!aborted) setError(e?.message ?? 'Load error');
       } finally {
-        if (!abort) setLoading(false);
+        if (!aborted) setLoading(false);
       }
     }
 
-    if (project && sectionCode) load();
+    if (project && params.code) load();
     return () => {
-      abort = true;
+      aborted = true;
     };
-  }, [project, sectionCode]);
+  }, [project, params.code]);
 
-  function openItem(code: string) {
-    router.push(
-      `/esglite/item/${encodeURIComponent(code)}?project=${encodeURIComponent(
-        project
-      )}`
-    );
-  }
+  const norm = (s?: string | null) =>
+    (s as ItemRow['status']) || 'not_started';
 
-  function badge(status?: string) {
-    const base =
-      'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border';
-    switch (status) {
-      case 'final':
-        return (
-          <span className={`${base} border-green-300 text-green-800 bg-green-50`}>
-            final
-          </span>
-        );
-      case 'draft':
-        return (
-          <span className={`${base} border-amber-300 text-amber-800 bg-amber-50`}>
-            draft
-          </span>
-        );
-      default:
-        return (
-          <span className={`${base} border-slate-300 text-slate-700 bg-slate-50`}>
-            not_started
-          </span>
-        );
-    }
-  }
+  const counts = React.useMemo(() => {
+    const base = { not_started: 0, draft: 0, final: 0 };
+    for (const it of items) base[norm(it.status)]++;
+    return base;
+  }, [items]);
+
+  const filtered = React.useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return items.filter((it) => {
+      const statusOk = filter === 'all' || norm(it.status) === filter;
+      const textOk =
+        !term ||
+        it.code.toLowerCase().includes(term) ||
+        (it.title || '').toLowerCase().includes(term);
+      return statusOk && textOk;
+    });
+  }, [items, q, filter]);
+
+  const total = items.length;
+  const done = counts.final;
+  const percent = total ? Math.round((done / total) * 100) : 0;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold">Basis for preparation</h1>
-        <div className="text-xs text-gray-600">
-          {progress.percent}% · Final {progress.final} / Draft {progress.draft} / Total{' '}
-          {progress.total}
+    <div className="mx-auto max-w-5xl px-4 py-8">
+      {/* header */}
+      <div className="mb-6 flex items-center justify-between gap-4">
+        <div>
+          <div className="text-sm text-gray-500">
+            Project <span className="font-medium">{project || '—'}</span> · Section{' '}
+            <span className="font-medium">{params.code}</span>
+          </div>
+          <h1 className="text-2xl font-semibold">
+            {sectionTitle || 'Section'}
+          </h1>
+        </div>
+
+        {/* mini progress */}
+        <div className="flex items-center gap-3 text-sm">
+          <div className="h-2 w-40 rounded bg-gray-200">
+            <div
+              className="h-2 rounded bg-gray-900 transition-all"
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+          <div className="tabular-nums text-gray-600">
+            {percent}% · Final {counts.final} / Draft {counts.draft} / Total {total}
+          </div>
         </div>
       </div>
 
-      <div className="mt-3 flex items-center gap-3">
-        <Link
-          className="text-xs text-gray-600 underline underline-offset-2"
-          href={`/questionnaires/esglite/${encodeURIComponent(
-            sectionCode
-          )}/disclosures?project=${encodeURIComponent(project)}`}
-        >
-          Disclosures view
-        </Link>
+      {/* toolbar */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search code or title…"
+          className="w-64 rounded border border-gray-300 px-3 py-2 text-sm outline-none focus:border-gray-500"
+        />
 
-        <button
-          className="ml-auto rounded bg-neutral-900 text-white text-sm px-3 py-1.5 disabled:opacity-50"
-          disabled={loading || rows.length === 0}
-          onClick={() => {
-            const next =
-              rows.find((r) => (r.status ?? 'not_started') !== 'final') ?? rows[0];
-            openItem(next.code);
-          }}
-        >
-          Continue
-        </button>
+        <StatusPill
+          active={filter === 'all'}
+          onClick={() => setFilter('all')}
+          label="All"
+        />
+        <StatusPill
+          active={filter === 'not_started'}
+          onClick={() => setFilter('not_started')}
+          label={`Not started (${counts.not_started})`}
+        />
+        <StatusPill
+          active={filter === 'draft'}
+          onClick={() => setFilter('draft')}
+          label={`Draft (${counts.draft})`}
+        />
+        <StatusPill
+          active={filter === 'final'}
+          onClick={() => setFilter('final')}
+          label={`Final (${counts.final})`}
+        />
+
+        <div className="ml-auto flex items-center gap-2">
+          <Link
+            className="text-sm text-gray-600 underline underline-offset-2"
+            href={`/questionnaires/esglite/${encodeURIComponent(
+              params.code
+            )}/disclosures?project=${encodeURIComponent(project)}`}
+          >
+            Disclosures view
+          </Link>
+          <Link
+            className="rounded bg-gray-900 px-3 py-2 text-sm text-white"
+            href={`/questionnaires/esglite/nodes?project=${encodeURIComponent(
+              project
+            )}`}
+          >
+            Continue
+          </Link>
+        </div>
       </div>
 
-      {error && (
-        <p className="mt-4 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+      {/* states */}
+      {loading && (
+        <div className="rounded border border-gray-200 bg-white p-4 text-sm text-gray-600">
+          Loading…
+        </div>
+      )}
+      {!!error && !loading && (
+        <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
           load {error}
-        </p>
+        </div>
       )}
 
-      <div className="mt-5 overflow-hidden rounded-md border">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">
-                Code
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">
-                Title
-              </th>
-              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">
-                Status
-              </th>
-              <th className="px-3 py-2"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100 bg-white">
-            {rows.map((r) => (
-              <tr key={r.code}>
-                <td className="px-3 py-2 text-sm font-medium text-gray-900">
-                  {r.code}
-                </td>
-                <td className="px-3 py-2 text-sm text-gray-800">{r.title}</td>
-                <td className="px-3 py-2">{badge(r.status)}</td>
-                <td className="px-3 py-2 text-right">
-                  <button
-                    className="rounded border border-gray-300 px-2.5 py-1 text-sm"
-                    onClick={() => openItem(r.code)}
-                  >
-                    Open
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {rows.length === 0 && !loading && (
+      {/* table */}
+      {!loading && !error && (
+        <div className="overflow-hidden rounded border border-gray-200 bg-white">
+          <table className="min-w-full text-sm">
+            <thead className="bg-gray-50 text-left text-gray-600">
               <tr>
-                <td className="px-3 py-6 text-sm text-gray-600" colSpan={4}>
-                  No items
-                </td>
+                <th className="px-4 py-3">Code</th>
+                <th className="px-4 py-3">Title</th>
+                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">Updated</th>
+                <th className="px-3 py-3 text-right"> </th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {filtered.map((it) => (
+                <tr key={it.code} className="border-t border-gray-100">
+                  <td className="px-4 py-3 font-mono">{it.code}</td>
+                  <td className="px-4 py-3">{it.title}</td>
+                  <td className="px-4 py-3">
+                    <StatusBadge status={norm(it.status)} />
+                  </td>
+                  <td className="px-4 py-3 text-gray-500">
+                    {it.updated_at ?? '—'}
+                  </td>
+                  <td className="px-3 py-3 text-right">
+                    <Link
+                      href={`/esglite/item/${encodeURIComponent(
+                        it.code
+                      )}?project=${encodeURIComponent(project)}`}
+                      className="rounded border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50"
+                    >
+                      Open
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td
+                    className="px-4 py-6 text-center text-gray-500"
+                    colSpan={5}
+                  >
+                    Nothing matches your filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
+      {/* back link */}
       <div className="mt-6">
         <Link
-          href={`/questionnaires/esglite/nodes?project=${encodeURIComponent(project)}`}
-          className="text-sm text-gray-700 underline underline-offset-2"
+          className="text-sm text-gray-600 underline underline-offset-2"
+          href={`/questionnaires/esglite/nodes?project=${encodeURIComponent(
+            project
+          )}`}
         >
           ← Back to sections
         </Link>
       </div>
     </div>
+  );
+}
+
+function StatusPill({
+  active,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={
+        'rounded-full px-3 py-1.5 text-xs ' +
+        (active
+          ? 'bg-gray-900 text-white'
+          : 'bg-gray-100 text-gray-800 hover:bg-gray-200')
+      }
+    >
+      {label}
+    </button>
+  );
+}
+
+function StatusBadge({ status }: { status: ItemRow['status'] }) {
+  const map: Record<string, string> = {
+    not_started: 'bg-gray-100 text-gray-700',
+    draft: 'bg-yellow-100 text-yellow-800',
+    final: 'bg-green-100 text-green-800',
+  };
+  return (
+    <span className={`rounded-full px-2 py-1 text-xs ${map[status || 'not_started']}`}>
+      {status || 'not_started'}
+    </span>
   );
 }
