@@ -1,7 +1,7 @@
 name: CI
 on:
   push:
-    branches: [ "main" ]
+    branches: ["**"]   # kõik harud
   pull_request:
 
 jobs:
@@ -13,20 +13,11 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-
       - name: Show pins/overrides
-        run: node -e "const p=require('./package.json'); console.log({ devTypesReact:p.devDependencies?.['@types/react'], devTypesReactDom:p.devDependencies?.['@types/react-dom'], overrides:p.overrides })"
-
-      - name: Copy env
-        run: cp .env.example .env.local || true
-
-      - name: Install deps (uses .npmrc -> legacy-peer-deps)
+        run: node -e "const p=require('./package.json'); console.log({devTypesReact:p.devDependencies?.['@types/react'], devTypesReactDom:p.devDependencies?.['@types/react-dom'], overrides:p.overrides})"
+      - run: cp .env.example .env.local || true
+      - name: Install deps
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
-
-      - name: Build (lint/TS ajutiselt ignoreeritud)
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+      - name: Build
         run: NEXT_TS_IGNORE_BUILD_ERRORS=1 NEXT_DISABLE_ESLINT=1 npm run build
