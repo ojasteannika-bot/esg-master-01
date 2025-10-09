@@ -3,14 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev -p 3001",
+    "dev": "PORT=${PORT:-3001} bash scripts/dev-strict.sh",
     "build": "next build",
-    "start": "next start -p 3001",
-    "lint": "eslint .",
-    "test": "vitest",
-    "start:prod": "NODE_ENV=production node server.js",
-    "typecheck": "tsc --noEmit",
-    "format": "prettier --write ."
+    "start": "next start",
+    "lint": "eslint",
+    "test": "vitest"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.74.0",
