@@ -1,5 +1,11 @@
-.next
-node_modules
-.env
-.env.*
+node_modules/
+.next/
+out/
+dist/
+coverage/
+*.log
 .DS_Store
+*.tsbuildinfo
+.env.local
+.env*.local
+# snapshots/  # (Jätame kommenteerituks, sest Sa tahad neid versiooni alla)
