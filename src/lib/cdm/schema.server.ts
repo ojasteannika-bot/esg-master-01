@@ -95,15 +95,83 @@ export async function safeGetItem(itemCode: string) {
   if (dict && dict[code]) return dict[code];
   return null;
 }
-// --- Temporary restore stubs for missing exports ---
-export function findItemAndSection(_code: string) {
-  return { item: null, section: null };
+// -----------------------------------------------------------------------------
+// Real implementations (first pass) for exports used by API routes
+// -----------------------------------------------------------------------------
+
+/**
+ * Find item and its section by item code.
+ * - Scans sections->items
+ * - Falls back to bundle.items dictionary if present
+ */
+export async function findItemAndSection(_code: string) {
+  const code = normCode(String(_code || ''));
+  if (!code) return { item: null as any, section: null as any };
+
+  // 1) search in structured sections
+  const sections = await safeGetAllSections();
+  for (const s of sections) {
+    const it = (Array.isArray(s.items) ? s.items : []).find(
+      (i: any) => normCode(i?.code) === code
+    );
+    if (it) return { item: it, section: s };
+  }
+
+  // 2) optional dictionary fallback from bundle
+  try {
+    const bundle = await getBundle();
+    const dict = (bundle?.items && typeof bundle.items === 'object') ? bundle.items : null;
+    if (dict && dict[code]) {
+      const sections2 = await safeGetAllSections();
+      for (const s of sections2) {
+        if ((Array.isArray(s.items) ? s.items : []).some((i: any) => normCode(i?.code) === code)) {
+          return { item: dict[code], section: s };
+        }
+      }
+      return { item: dict[code], section: null as any };
+    }
+  } catch {
+    // ignore
+  }
+
+  return { item: null as any, section: null as any };
 }
 
-export function chooseNextItemCode(_opts?: any) {
-  return null;
+/**
+ * Choose next (or previous) item code for simple linear navigation.
+ * opts: { current?: string, direction?: 'next'|'prev' }
+ */
+export async function chooseNextItemCode(opts?: { current?: string; direction?: 'next' | 'prev' }) {
+  const direction = opts?.direction === 'prev' ? 'prev' : 'next';
+  const cur = normCode(String(opts?.current || ''));
+
+  const sections = await safeGetAllSections();
+  const flat: string[] = [];
+  for (const s of sections) {
+    for (const i of (Array.isArray(s.items) ? s.items : [])) {
+      const c = normCode(i?.code);
+      if (c) flat.push(c);
+    }
+  }
+  if (flat.length === 0) return null;
+
+  if (!cur) return direction === 'prev' ? flat[flat.length - 1] : flat[0];
+
+  const idx = flat.indexOf(cur);
+  if (idx < 0) return direction === 'prev' ? flat[flat.length - 1] : flat[0];
+
+  if (direction === 'prev') return idx > 0 ? flat[idx - 1] : null;
+  return idx < flat.length - 1 ? flat[idx + 1] : null;
 }
 
-export function computeProgress() {
-  return { completed: 0, total: 0 };
+/**
+ * Compute simple progress over all items.
+ * First pass: totals are real, completed=0 (extend later with answers).
+ */
+export async function computeProgress(): Promise<{ completed: number; total: number }> {
+  const sections = await safeGetAllSections();
+  let total = 0;
+  for (const s of sections) total += Array.isArray(s.items) ? s.items.length : 0;
+  const completed = 0;
+  return { completed, total };
 }
