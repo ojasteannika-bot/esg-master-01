@@ -95,3 +95,15 @@ export async function safeGetItem(itemCode: string) {
   if (dict && dict[code]) return dict[code];
   return null;
 }
+// --- Temporary restore stubs for missing exports ---
+export function findItemAndSection(_code: string) {
+  return { item: null, section: null };
+}
+
+export function chooseNextItemCode(_opts?: any) {
+  return null;
+}
+
+export function computeProgress() {
+  return { completed: 0, total: 0 };
+}
