@@ -1,22 +1,16 @@
 'use client';
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
 
-import { Suspense } from 'react';
-
-function PageInner() {
-  // siia võib jääda sinu olemasolev kood (useSearchParams jne)
-  return (
-    <main style={{ padding: 24 }}>
-      <h1>ESGLITE – dashboard</h1>
-    </main>
-  );
-}
+import { useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 export default function Page() {
-  return (
-    <Suspense fallback={null}>
-      <PageInner />
-    </Suspense>
-  );
+  const router = useRouter();
+  const sp = useSearchParams();
+  const project = sp.get('project') ?? 'client-test1';
+
+  useEffect(() => {
+    router.replace(`/questionnaires/esglite/nodes?project=${encodeURIComponent(project)}`);
+  }, [router, project]);
+
+  return null;
 }

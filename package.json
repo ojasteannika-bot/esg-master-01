@@ -5,11 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3001",
     "build": "next build",
-    "start": "next start -p 3001",
-    "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
-    "format": "prettier --write .",
-    "test": "vitest"
+    "start": "next start -p 3001"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.74.0",

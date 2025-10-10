@@ -1,16 +1,15 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ES2020",
     "lib": [
       "dom",
-      "es2022"
+      "es2020"
     ],
     "jsx": "preserve",
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "strict": false,
+    "strict": true,
     "baseUrl": ".",
     "paths": {
       "@/*": [
@@ -21,6 +20,7 @@
       "node"
     ],
     "allowJs": true,
+    "skipLibCheck": true,
     "noEmit": true,
     "incremental": true,
     "esModuleInterop": true,

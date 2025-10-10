@@ -1,0 +1,22 @@
+{
+  "projects": {
+    "client-test1": {
+      "items": {
+        "B1-1": {
+          "status": "draft",
+          "updated": "2025-10-10T15:40:16.343Z"
+        }
+      },
+      "evidence": {
+        "B1-1": [
+          {
+            "id": "77227c7e-9d58-42ae-bd43-b0be67b9978c",
+            "name": "Board minutes",
+            "url": "https://example.com/minutes.pdf",
+            "addedAt": "2025-10-10T15:40:25.252Z"
+          }
+        ]
+      }
+    }
+  }
+}
