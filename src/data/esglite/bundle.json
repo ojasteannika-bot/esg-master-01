@@ -3,44 +3,42 @@
     {
       "code": "B1",
       "title": "Basis for preparation",
+      "description": "",
       "items": [
-        {
-          "code": "B1-1",
-          "title": "Which VSME modules are included?",
-          "fields": [
-            { "id": "included_modules", "label": "Included modules", "type": "select", "options": ["Basic", "Comprehensive", "Both"] },
-            { "id": "notes", "label": "Notes", "type": "textarea" }
-          ]
-        },
-        {
-          "code": "B1-2",
-          "title": "Individual or consolidated?",
-          "fields": [
-            { "id": "basis", "label": "Basis", "type": "select", "options": ["Individual", "Consolidated"] },
-            { "id": "notes", "label": "Notes", "type": "textarea" }
-          ]
-        }
+        { "code": "B1-1", "title": "Which VSME modules are included?" },
+        { "code": "B1-2", "title": "Individual or consolidated?" }
       ]
     },
     {
       "code": "B2",
       "title": "Practices & initiatives",
+      "description": "",
       "items": [
-        { "code": "B2-1", "title": "Policy statement", "fields": [
-          { "id": "policy_text", "label": "Policy text", "type": "textarea" },
-          { "id": "effective_from", "label": "Effective from", "type": "date" }
-        ] }
+        { "code": "B2-1", "title": "Policy statement" }
       ]
     },
     {
       "code": "B3",
       "title": "Energy & GHG",
+      "description": "",
       "items": [
-        { "code": "B3-1", "title": "Energy use", "fields": [
-          { "id": "energy_mwh", "label": "Energy (MWh)", "type": "number" },
-          { "id": "notes", "label": "Notes", "type": "textarea" }
-        ] }
+        { "code": "B3-1", "title": "Energy use" }
+      ]
+    },
+    {
+      "code": "B4",
+      "title": "Pollution of air, water and soil",
+      "description": "",
+      "items": [
+        { "code": "B4-1", "title": "Pollution overview" }
       ]
     }
-  ]
+  ],
+  "items": {
+    "B1-1": { "section": "B1", "title": "Which VSME modules are included?" },
+    "B1-2": { "section": "B1", "title": "Individual or consolidated?" },
+    "B2-1": { "section": "B2", "title": "Policy statement" },
+    "B3-1": { "section": "B3", "title": "Energy use" },
+    "B4-1": { "section": "B4", "title": "Pollution overview" }
+  }
 }
