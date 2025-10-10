@@ -1,30 +1,35 @@
-import { NextResponse } from 'next/server';
-import { listSections } from '@/lib/cdm/find.server';
-import { computeProgress } from '@/lib/cdm/schema.server';
-
-export const dynamic = 'force-dynamic';
+import { NextResponse } from "next/server";
+import {
+  safeGetAllSections,
+  safeGetSectionWithItems,
+} from "@/lib/cdm/schema.server";
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const project = (searchParams.get('project') || '').trim();
-  if (!project) {
-    return NextResponse.json({ ok: false, error: 'missing project' }, { status: 400 });
+  const url = new URL(req.url);
+  const project = url.searchParams.get("project") || "demo-project-01";
+
+  try {
+    const secs = await safeGetAllSections();
+
+    const sections = await Promise.all(
+      secs.map(async (s) => {
+        const { section, items } = await safeGetSectionWithItems(s.code);
+        return {
+          section: {
+            code: section.code,
+            title: section.title ?? "",
+            description: (section as any).description ?? "",
+          },
+          items: items ?? [],
+        };
+      })
+    );
+
+    return NextResponse.json({ ok: true, project, sections });
+  } catch (err: any) {
+    return NextResponse.json(
+      { ok: false, error: err?.message ?? "failed to load sections" },
+      { status: 500 }
+    );
   }
-
-  const sections = await listSections();
-  const rows = await Promise.all(
-    sections.map(async (s) => {
-      const p = await computeProgress(project, s.code);
-      return {
-        code: s.code,
-        title: s.title ?? s.code,
-        total: p.total,
-        final: p.final,
-        draft: p.draft,
-        not_started: p.not_started
-      };
-    })
-  );
-
-  return NextResponse.json({ ok: true, project, sections: rows });
 }

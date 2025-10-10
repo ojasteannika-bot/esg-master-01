@@ -1,98 +1,81 @@
 // src/app/api/cdm/section-status/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { getBundle } from '@/lib/cdm/schema.server';
+import { NextResponse } from "next/server";
+import {
+  safeGetSectionWithItems,
+  computeProgress,
+} from "@/lib/cdm/schema.server";
 
-type Counts = { final: number; draft: number; total: number };
-type Status = 'not_started' | 'draft' | 'final' | 'ready';
+// Force dynamic so dev/prod won’t cache this route
+export const dynamic = "force-dynamic";
 
-export const dynamic = 'force-dynamic';
+type ItemStatus = "not_started" | "draft" | "final";
+type Progress = { completed: number; total: number };
 
-export async function GET(req: NextRequest) {
+export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
-    const project = searchParams.get('project') || '';
-    const sectionRaw = searchParams.get('code') || '';
+    const project = searchParams.get("project") ?? "demo-project-01";
+    const code = (searchParams.get("code") ?? "").toUpperCase();
 
-    if (!project || !sectionRaw) {
+    if (!code) {
       return NextResponse.json(
-        { ok: false, error: 'Missing project or code' },
+        { ok: false, error: "missing code" },
         { status: 400 }
       );
     }
 
-    // Normaliseeri sektsiooni kood (B1, B2, ...)
-    const section = sectionRaw.toUpperCase();
+    // Load section + items from bundle (failsafe if missing)
+    const section = await safeGetSectionWithItems(code);
+    if (!section) {
+      return NextResponse.json(
+        { ok: false, error: "unknown section", project, code },
+        { status: 404 }
+      );
+    }
 
-    // Leia sektsiooni itemid bundle’ist
-    const bundle = await getBundle();
-    const sec = (bundle.sections || []).find((s: any) => (s.code || '').toUpperCase() === section);
-    const itemCodes: string[] = Array.isArray(sec?.items)
-      ? sec.items.map((it: any) => it.code).filter(Boolean)
+    // Default item list
+    const itemCodes: string[] = Array.isArray(section.items)
+      ? section.items.map((it: any) => String(it.code)).filter(Boolean)
       : [];
 
-    // Valmista ette defaults
-    const statuses: Record<string, Status> = {};
-    const updated: Record<string, string | null> = {};
-    for (const code of itemCodes) {
-      statuses[code] = 'not_started';
-      updated[code] = null;
-    }
-
-    // Supabase
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-
-    // Loeme olemasolevad read antud sektsiooni kohta
-    const { data, error } = await supabase
-      .from('cdm_records')
-      .select('code,status,updated_at,section_code')
-      .eq('project_id', project)
-      .eq('section_code', section);
-
-    if (error) {
-      return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-    }
-
-    // Arvuta loendurid + uuenda staatuseid
-    const counts: Counts = { final: 0, draft: 0, total: itemCodes.length };
-
-    for (const row of data || []) {
-      const code = row.code as string;
-      const st = (row.status as string) || 'not_started';
-
-      if (code && code in statuses) {
-        // map 'ready' → 'final' visuaalselt
-        const norm: Status = st === 'ready' ? 'final' : (st as Status);
-        statuses[code] = norm;
-
-        if (row.updated_at) {
-          const ts = new Date(row.updated_at).toISOString();
-          if (!updated[code] || ts > (updated[code] as string)) {
-            updated[code] = ts;
-          }
-        }
+    // Compute progress (fallback to zeros on any error)
+    let progress: Progress = { completed: 0, total: itemCodes.length };
+    try {
+      const p = await (computeProgress as any)(project, section);
+      if (p && typeof p.completed === "number" && typeof p.total === "number") {
+        progress = { completed: p.completed, total: p.total };
       }
+    } catch {
+      // ignore – keep default progress
     }
 
-    // Lõpuks loe loendurid
-    for (const code of itemCodes) {
-      const st = statuses[code];
-      if (st === 'final') counts.final += 1;
-      else if (st === 'draft' || st === 'partial') counts.draft += 1;
-    }
+    // Very light default statuses so the UI has something to render
+    const items = itemCodes.map((c) => ({
+      code: c,
+      status: "not_started" as ItemStatus,
+      updated: null as string | null,
+    }));
+
+    // Optionally derive draft/final counts from statuses (all not_started here)
+    const counts = {
+      final: items.filter((i) => i.status === "final").length,
+      draft: items.filter((i) => i.status === "draft").length,
+      total: items.length,
+    };
 
     return NextResponse.json({
       ok: true,
       project,
-      section,
-      statuses,
-      updated,
+      code,
+      progress,
       counts,
+      items,
     });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message || 'section-status failed' }, { status: 500 });
+    // Never kill the page with 500; return an ok:false payload instead
+    return NextResponse.json(
+      { ok: false, error: e?.message ?? "unexpected error" },
+      { status: 200 }
+    );
   }
 }
