@@ -1,16 +1,11 @@
-'use client';
-
-import { useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+// src/app/esglite/page.tsx
+import { Suspense } from 'react';
+import Client from './page.client';
 
 export default function Page() {
-  const router = useRouter();
-  const sp = useSearchParams();
-  const project = sp.get('project') ?? 'client-test1';
-
-  useEffect(() => {
-    router.replace(`/questionnaires/esglite/nodes?project=${encodeURIComponent(project)}`);
-  }, [router, project]);
-
-  return null;
+  return (
+    <Suspense fallback={<div style={{ padding: 16 }}>Loading…</div>}>
+      <Client />
+    </Suspense>
+  );
 }
