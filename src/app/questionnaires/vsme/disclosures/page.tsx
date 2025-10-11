@@ -1,165 +1,75 @@
-// src/app/questionnaires/vsme/disclosures/page.tsx
-import Link from 'next/link';
-import ProgressRing from '@/components/vsme/ProgressRing';
-import { readVsmeBundle } from '@/lib/vsme/schema';
+'use client';
 
-type Search = Record<string, string | string[] | undefined>;
+// VSME Disclosures – lihtne stub, null väliseid impordeid.
+// Turvaline Next 15 jaoks: kogu leht on client-component.
 
-/** Kasuta B… kui BASIC, C… kui COMPREHENSIVE, muu -> BASIC (turvaline vaikimisi). */
-function detectModule(code: string): 'BASIC' | 'COMPREHENSIVE' {
-  if (code?.startsWith('C')) return 'COMPREHENSIVE';
-  return 'BASIC';
-}
+import { useSearchParams } from 'next/navigation';
 
-/** Lihtne sektsioonide väljavõtt bundlist.
- * Otsime puust kõik elemendid, millel on code/id/key ja see vastab mustrile B1 / B1-1 / C3 jne.
- */
-function collectSections(tree: any): { code: string; title?: string; module: 'BASIC' | 'COMPREHENSIVE' }[] {
-  const out: { code: string; title?: string; module: 'BASIC' | 'COMPREHENSIVE' }[] = [];
+export default function VsmeDisclosuresPage() {
+  const sp = useSearchParams();
+  const project = sp.get('project') ?? 'client-test1';
 
-  const walk = (node: any) => {
-    if (!node || typeof node !== 'object') return;
-
-    const code =
-      node.code ??
-      node.id ??
-      node.key ??
-      node?.attrs?.code ??
-      node?.meta?.code ??
-      undefined;
-
-    if (typeof code === 'string' && /^[A-Z]\d+(?:-\d+)?$/.test(code)) {
-      out.push({
-        code,
-        title: node.title ?? node.name ?? node.label,
-        module: detectModule(code),
-      });
-    }
-    const children = node.nodes ?? node.children ?? node.items ?? [];
-    if (Array.isArray(children)) children.forEach(walk);
-  };
-
-  if (Array.isArray(tree)) {
-    tree.forEach(walk);
-  } else if (tree && typeof tree === 'object') {
-    walk(tree);
-  }
-  return out;
-}
-
-function pill(href: string, active: boolean, label: string) {
-  const base = 'px-3 py-1.5 rounded-full border text-sm';
-  return (
-    <Link
-      href={href}
-      className={
-        active
-          ? `${base} bg-gray-900 text-white border-gray-900`
-          : `${base} bg-white hover:bg-gray-50 border-gray-300 text-gray-700`
-      }
-    >
-      {label}
-    </Link>
-  );
-}
-
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: Promise<Search>;
-}) {
-  const sp = await searchParams;
-  const mode = (typeof sp.mode === 'string' ? sp.mode : 'all').toLowerCase() as
-    | 'all'
-    | 'basic'
-    | 'comprehensive';
-
-  // loe bundle
-  const bundle = readVsmeBundle();
-  const root = (bundle?.nodes ?? bundle) as any;
-  const allSections = collectSections(root);
-
-  const filtered =
-    mode === 'all'
-      ? allSections
-      : allSections.filter((s) =>
-          mode === 'basic' ? s.module === 'BASIC' : s.module === 'COMPREHENSIVE'
-        );
-
-  // MVP-progress (kuni DB seotus): completed = 0, total = sektsioonid
-  const completed = 0;
-  const total = allSections.length;
-  const pct = total > 0 ? completed / total : 0;
+  // Väike demo-sisu – real UI tuleb hiljem
+  const rows = [
+    { code: 'S1', title: 'Strategy & Governance', progress: 0 },
+    { code: 'S2', title: 'Impacts & Risks',       progress: 0 },
+    { code: 'S3', title: 'Metrics',               progress: 0 },
+    { code: 'S4', title: 'Targets',               progress: 0 },
+  ];
 
   return (
-    <main className="container mx-auto p-6">
-      <nav className="mb-4 text-sm text-gray-500">
-        <Link href="/questionnaires">Questionnaires</Link>
-        {' / '}
-        <span>Disclosures</span>
-      </nav>
+    <main style={{ maxWidth: 920, margin: '0 auto', padding: 24 }}>
+      <h1 style={{ fontSize: 22, fontWeight: 600, marginBottom: 8 }}>
+        VSME · Disclosures
+      </h1>
+      <p style={{ color: '#666', marginBottom: 24 }}>
+        Project: <strong>{project}</strong>
+      </p>
 
-      <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold">VSME — Disclosures</h1>
-          <p className="text-gray-500 mt-1">
-            Filter by module and open any section to answer questions.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-6">
-          <ProgressRing
-            value={pct}
-            label={`${completed} of ${total} datapoints completed`}
-          />
-          <div className="flex gap-2">
-            {pill('/questionnaires/vsme/disclosures?mode=all', mode === 'all', 'All')}
-            {pill('/questionnaires/vsme/disclosures?mode=basic', mode === 'basic', 'Basic module')}
-            {pill(
-              '/questionnaires/vsme/disclosures?mode=comprehensive',
-              mode === 'comprehensive',
-              'Comprehensive module'
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {filtered.length === 0 ? (
-          <div className="col-span-full rounded-lg border border-dashed p-8 text-gray-500">
-            No sections found in bundle. Check{' '}
-            <code>src/data/vsme/bundle.json</code>.
-          </div>
-        ) : (
-          filtered.map((s) => (
-            <div
-              key={s.code}
-              className="rounded-lg border bg-white p-4 hover:shadow-sm transition"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="font-medium">{s.title ?? 'Untitled section'}</div>
-                  <div className="text-sm text-gray-500">Code: {s.code}</div>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr style={{ textAlign: 'left', borderBottom: '1px solid #eee' }}>
+            <th style={{ padding: '10px 6px', width: 90 }}>Code</th>
+            <th style={{ padding: '10px 6px' }}>Title</th>
+            <th style={{ padding: '10px 6px', width: 160 }}>Progress</th>
+            <th style={{ padding: '10px 6px', width: 100 }} />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.code} style={{ borderBottom: '1px solid #f2f2f2' }}>
+              <td style={{ padding: '10px 6px', fontWeight: 600 }}>{r.code}</td>
+              <td style={{ padding: '10px 6px' }}>{r.title}</td>
+              <td style={{ padding: '10px 6px' }}>
+                <div style={{ background: '#f2f2f2', height: 8, borderRadius: 4 }}>
+                  <div style={{
+                    width: `${r.progress}%`,
+                    height: '100%',
+                    borderRadius: 4,
+                    background: '#111827'
+                  }} />
                 </div>
-
-                <span className="text-xs px-2 py-1 rounded-full border">
-                  {s.module}
-                </span>
-              </div>
-
-              <div className="mt-4 flex items-center justify-between gap-3">
-                <div className="text-sm text-gray-500">EMPTY</div>
-                <Link
-                  href={`/questionnaires/vsme/${encodeURIComponent(s.code)}`}
-                  className="px-3 py-1.5 rounded-md bg-gray-900 text-white text-sm"
+                <span style={{ fontSize: 12, color: '#666' }}>{r.progress}%</span>
+              </td>
+              <td style={{ padding: '10px 6px' }}>
+                <a
+                  href={`/questionnaires/vsme/disclosures/${r.code.toLowerCase()}?project=${encodeURIComponent(project)}`}
+                  style={{
+                    display: 'inline-block',
+                    padding: '6px 12px',
+                    background: '#0f172a',
+                    color: 'white',
+                    borderRadius: 8,
+                    textDecoration: 'none'
+                  }}
                 >
                   Open
-                </Link>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+                </a>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </main>
   );
 }
