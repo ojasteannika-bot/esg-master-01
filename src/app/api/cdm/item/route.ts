@@ -1,64 +1,39 @@
 import { NextResponse } from 'next/server';
-import { z } from 'zod';
-import { safeGetItem } from '@/lib/cdm/schema.server';
-import { createClient } from '@supabase/supabase-js';
-
-const Q = z.object({
-  project: z.string().min(1),                       // lubame inimloetavad ID-d
-  code: z.string().regex(/^[A-Z]+\d+-\d+$/i),       // B1-1, B1-2, C3-10 jne
-});
-
-function sb() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, key, { auth: { persistSession: false } });
-}
+import { getItemStatus, setItemStatus } from '@/lib/cdm/state.server';
+import { appendAudit } from '@/lib/cdm/state.server';
 
 export async function GET(req: Request) {
-  const url = new URL(req.url);
-  const parsed = Q.safeParse(Object.fromEntries(url.searchParams));
-  if (!parsed.success) {
-    return NextResponse.json(
-      { ok: false, error: parsed.error.issues[0]?.message ?? 'Invalid query' },
-      { status: 400 },
-    );
+  const { searchParams } = new URL(req.url);
+  const project = searchParams.get('project') ?? '';
+  const code = searchParams.get('code') ?? '';
+  if (!project || !code) {
+    return NextResponse.json({ ok: false, error: 'Missing project or code' }, { status: 400 });
   }
-  const { project, code } = parsed.data;
+  const status = await getItemStatus(project, code);
+  return NextResponse.json({ ok: true, project, code, status });
+}
 
+export async function POST(req: Request) {
   try {
-    const schema = await safeGetItem(code);
+    const body = await req.json();
+    const project: string = body?.project ?? '';
+    const code: string = body?.code ?? '';
+    const status: 'not_started' | 'draft' | 'final' = body?.status ?? 'not_started';
+    if (!project || !code) {
+      return NextResponse.json({ ok: false, error: 'Missing project or code' }, { status: 400 });
+    }
+    await setItemStatus(project, code, status);
 
-    // Loe olemasolev kirje (kui on)
-    const supa = sb();
-    const { data, error } = await supa
-      .from('cdm_records')
-      .select('status, cdm, draft, updated_at, section_code, code')
-      .eq('project_id', project)
-      .eq('code', code)
-      .maybeSingle();
-
-    if (error) throw error;
-
-    const item = {
-      code,
-      status: (data?.status ?? 'not_started') as 'not_started' | 'draft' | 'final',
-      values: (data?.cdm ?? data?.draft ?? {}) as Record<string, any>,
-      updated_at: data?.updated_at ?? null,
-      section_code: data?.section_code ?? schema.section_code,
-    };
-
-    return NextResponse.json({
-      ok: true,
+    await appendAudit({
+      at: new Date().toISOString(),
       project,
-      schema,      // definitsioon bundle’ist
-      item,        // olemasolev vastus (kui oli)
-      evidence: [],// (täidame hiljem)
-      audit: [],   // (täidame hiljem)
+      type: 'save',
+      ctx: code,
+      data: { field: 'status', value: status },
     });
-  } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: e?.message ?? 'Item load failed' },
-      { status: 500 },
-    );
+
+    return NextResponse.json({ ok: true, project, code, status: { status, updated: new Date().toISOString() } });
+  } catch (err: any) {
+    return NextResponse.json({ ok: false, error: String(err?.message ?? err) }, { status: 500 });
   }
 }

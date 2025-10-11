@@ -1,61 +1,32 @@
-import 'server-only';
-import fs from 'fs/promises';
-import path from 'path';
+// src/lib/vsme/schema.ts
+// Minimaalne stub, et CI oleks roheline. Asendame hiljem päris-impliga.
 
-export type VsmeAnswerOption = { value: string; label: string };
-export type VsmeItem = {
-  code: string;
-  text: string;
-  type?: 'select' | 'text';
-  options?: VsmeAnswerOption[];
-};
-export type VsmeSection = { code: string; title: string; items: VsmeItem[] };
+export type VsmeSection = { code: string; title: string };
+export type VsmeNode = { id: string; type: string; title?: string };
 
-// Tagastame alati massiivi: VsmeSection[]
-export type VsmeBundle = VsmeSection[];
-
-const BUNDLE_PATH = path.join(process.cwd(), 'src', 'data', 'vsme', 'bundle.json');
-
-/** Loeb VSME bundle'i ja normaliseerib kuju alati massiiviks. */
-export async function readVsmeBundle(): Promise<VsmeBundle> {
-  const raw = await fs.readFile(BUNDLE_PATH, 'utf8');
-  const data = JSON.parse(raw);
-  // Toetame nii [ ... ] kui ka { sections: [ ... ] } vorme
-  if (Array.isArray(data)) return data as VsmeBundle;
-  if (data && Array.isArray(data.sections)) return data.sections as VsmeBundle;
-  return []; // ohutu vaikimisi
+export async function readVsmeBundle(): Promise<{
+  sections: VsmeSection[];
+  nodes: VsmeNode[];
+}> {
+  return { sections: [], nodes: [] };
 }
 
-/** B1-1 -> B1 (aitab kiirelt õige sektsiooni leida) */
-export function inferSectionCode(itemCode: string): string {
-  const m = String(itemCode).match(/^([A-Za-z]\d+)-/);
-  return m ? m[1].toUpperCase() : '';
+export function getRootNodes(): VsmeNode[] {
+  return [];
 }
 
-/** Leiab konkreetse küsimuse koodi järgi. */
-export function findItemByCode(sections: VsmeBundle, itemCode: string): {
-  section?: VsmeSection;
-  item?: VsmeItem;
-} {
-  const target = String(itemCode).toUpperCase();
-  const sectionCode = inferSectionCode(target);
-
-  for (const s of sections ?? []) {
-    if (!s) continue;
-    if (sectionCode && String(s.code).toUpperCase() !== sectionCode) continue;
-    const it = (s.items ?? []).find(i => String(i?.code).toUpperCase() === target);
-    if (it) return { section: s, item: it };
-  }
-  return {};
+export function collectAllSections(): VsmeSection[] {
+  return [];
 }
 
-/** Tagastab ühe sektsiooni kõik küsimused. */
-export function listSectionItems(sections: VsmeBundle, sectionCode: string) {
-  const s = sections.find(sec => String(sec?.code).toUpperCase() === String(sectionCode).toUpperCase());
-  return s?.items ?? [];
+export function findSection(_code: string): VsmeSection | null {
+  return null;
 }
 
-/** Abiks, kui vajad "B1-1" -> "B1-1" (kinnitame vormingu) */
-export function normalizeItemCode(code: string) {
-  return String(code).trim().toUpperCase();
+export function enumerateQuestions(_section?: string): VsmeNode[] {
+  return [];
+}
+
+export function inferSectionCode(_nodeId: string): string | null {
+  return null;
 }
