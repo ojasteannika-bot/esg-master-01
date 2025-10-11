@@ -38,3 +38,11 @@
 {"at":"2025-10-10T21:53:32.912Z","project":"client-test1","type":"save","ctx":"B1-1","data":{"field":"status","value":"draft"}}
 {"at":"2025-10-10T21:53:33.723Z","project":"client-test1","type":"save","ctx":"B1-1","data":{"field":"status","value":"not_started"}}
 {"at":"2025-10-10T21:53:33.739Z","project":"client-test1","type":"save","ctx":"B1-1","data":{"field":"status","value":"not_started"}}
+{"at":"2025-10-11T10:50:19.094Z","project":"client-test1","type":"nav","ctx":"/esglite","data":{"note":"ok"}}
+{"at":"2025-10-11T10:50:33.112Z","project":"client-test1","type":"save","ctx":"B1-1","data":{"q1":"hello","q2":"world"}}
+{"at":"2025-10-11T10:50:42.641Z","project":"client-test1","type":"status","ctx":"B1-1","data":{"status":"final"}}
+{"at":"2025-10-11T11:09:25.065Z","project":"client-test1","type":"status","ctx":"B1-1","data":{"status":"draft"}}
+{"at":"2025-10-11T11:09:25.100Z","project":"client-test1","type":"status","ctx":"B1-1","data":{"status":"final"}}
+{"at":"2025-10-11T11:12:34.105Z","project":"client-test1","type":"save","ctx":"B4-1","data":{"q1":"","q2":""}}
+{"at":"2025-10-11T11:12:37.704Z","project":"client-test1","type":"status","ctx":"B4-1","data":{"status":"draft"}}
+{"at":"2025-10-11T11:13:13.289Z","project":"client-test1","type":"status","ctx":"B1-2","data":{"status":"final"}}
