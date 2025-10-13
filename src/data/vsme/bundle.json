@@ -1,19 +1,29 @@
 {
   "sections": [
+    { "code": "B1", "title": "Basis for preparation" }
+  ],
+  "nodes": [
     {
+      "id": "B1",
       "code": "B1",
       "title": "Basis for preparation",
-      "items": [
-        { "code": "B1-1", "title": "Which VSME modules are included?" },
-        { "code": "B1-2", "title": "Individual or consolidated?" },
-        { "code": "B1-3", "title": "Reporting perimeter notes" }
-      ]
-    },
-    {
-      "code": "B2",
-      "title": "Practices, policies and future initiatives",
-      "items": [
-        { "code": "B2-1", "title": "Policy statement" }
+      "children": [
+        {
+          "id": "B1-1",
+          "code": "B1-1",
+          "title": "Which VSME modules are included?",
+          "options": ["E1", "S1", "G1", "ESG-lite"]
+        },
+        {
+          "id": "B1-2",
+          "code": "B1-2",
+          "title": "Individual or consolidated?"
+        },
+        {
+          "id": "B1-3",
+          "code": "B1-3",
+          "title": "Reporting perimeter notes"
+        }
       ]
     }
   ]

@@ -1,50 +1,27 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import React from 'react';
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
-type Item = { href: string; label: string };
+type Item = { label: string; href: string };
 
-const NAV: Item[] = [
-  { href: '/',                 label: 'Home' },
-  { href: '/questionnaires',   label: 'Questionnaires' },
-  { href: '/wizard',           label: 'Wizard' },
-  { href: '/preview',          label: 'Preview' },
-  { href: '/audit',            label: 'Audit' },
-  { href: '/integrations',     label: 'Integrations' },
-];
+export default function TopNav({ items }: { items: Item[] }) {
+  const sp = useSearchParams();
+  const project = sp.get("project") ?? undefined;
 
-function isActive(pathname: string, href: string) {
-  if (href === '/') return pathname === '/';
-  return pathname === href || pathname.startsWith(href + '/');
-}
-
-export default function TopNav() {
-  const pathname = usePathname() || '/';
+  const toUrlObject = (href: string) => {
+    const u = new URL(href, "http://d");
+    if (project) u.searchParams.set("project", project);
+    return { pathname: u.pathname, query: Object.fromEntries(u.searchParams.entries()) };
+  };
 
   return (
-    <nav className="w-full border-t border-slate-200">
-      <ul className="container mx-auto flex flex-wrap gap-4 p-3">
-        {NAV.map((it) => {
-          const active = isActive(pathname, it.href);
-          return (
-            <li key={it.href}>
-              <Link
-                href={it.href}
-                className={
-                  'text-sm px-2 py-1 rounded hover:bg-slate-100 ' +
-                  (active
-                    ? 'font-semibold underline underline-offset-4'
-                    : 'text-slate-600')
-                }
-              >
-                {it.label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <div style={{ display: "flex", gap: 16, padding: 12 }}>
+      {(items ?? []).map((it) => (
+        <Link key={it.href} href={toUrlObject(it.href)}>
+          {it.label}
+        </Link>
+      ))}
+    </div>
   );
 }

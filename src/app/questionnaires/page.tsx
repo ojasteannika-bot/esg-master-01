@@ -1,100 +1,60 @@
-'use client';
+import type { Metadata } from "next";
+import Link from "next/link";
+import { Card, CardBody, CardHeader } from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
 
-import Link from 'next/link';
-import React, { useEffect, useMemo, useState } from 'react';
-import { getProjectId, onProjectChange } from '../../lib/project';
-
-type StatusRow = {
-  section_code: string;
-  has_final: boolean;
-  has_draft: boolean;
-  created_at: string;
-  updated_at: string;
+export const metadata: Metadata = {
+  title: "Questionnaires",
+  description: "List of available questionnaires/sections",
 };
 
-const SECTIONS = [
-  { code: 'a',  title: 'Section A',  desc: 'Company basics (demo)' },
-  { code: 'b',  title: 'Section B',  desc: 'Environmental (demo)' },
-  { code: 'b1', title: 'Section B1', desc: 'Operational metrics (demo)' },
+type Section = { code: string; title: string; href: string; note?: string };
+
+const SECTIONS: Section[] = [
+  { code: "A",  title: "Section A — Company basics",      href: "/questionnaires/vsme/a",  note: "DEMO" },
+  { code: "B",  title: "Section B — Environmental",       href: "/questionnaires/vsme/b",  note: "DEMO" },
+  { code: "B1", title: "Section B1 — Operational metrics",href: "/questionnaires/vsme/b1" },
 ];
 
-export default function QuestionnairesIndex() {
-  const [project, setProject] = useState<string>(getProjectId());
-  const [rows, setRows] = useState<StatusRow[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => onProjectChange((id) => setProject(id)), []);
-
-  const map = useMemo(() => {
-    const m = new Map<string, StatusRow>();
-    for (const r of rows) m.set(r.section_code, r);
-    return m;
-  }, [rows]);
-
-  async function load() {
-    if (!project) return;
-    setLoading(true);
-    try {
-      const u = new URL('/api/cdm/status', window.location.origin);
-      u.searchParams.set('projectId', project);
-      const res = await fetch(u.toString(), { cache: 'no-store' });
-      const json = await res.json();
-      setRows(json?.data ?? []);
-    } catch {
-      setRows([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => { load(); }, [project]);
-
+export default function Page() {
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Questionnaires</h1>
-        <button
-          onClick={load}
-          className="px-4 py-2 rounded-lg bg-slate-900 text-white disabled:opacity-60"
-          disabled={loading}
-        >
-          {loading ? 'Loading…' : 'Refresh'}
-        </button>
-      </div>
+    <div className="space-y-4">
+      {/* UUS PÄIS (ainus) */}
+      <header
+        className="mb-6"
+        style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "space-between" }}
+      >
+        <div>
+          <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em" }}>Questionnaires</h1>
+          <p className="text-[--color-text-muted]" style={{ marginTop: 4 }}>
+            Choose a section to open its questionnaire.
+          </p>
+        </div>
+        <a href="/get-report" className="btn btn-primary">Generate report</a>
+      </header>
 
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {SECTIONS.map((s) => {
-          const st = map.get(s.code);
-          const ok = st?.has_final;
-          const draft = !ok && st?.has_draft;
-          const badge = ok ? 'FINAL' : draft ? 'DRAFT' : 'EMPTY';
-          const badgeClass = ok
-            ? 'bg-emerald-600 text-white'
-            : draft
-            ? 'bg-amber-500 text-black'
-            : 'bg-slate-200 text-slate-700';
-
-          return (
-            <Link
-              key={s.code}
-              href={`/questionnaires/vsme/${s.code}`}
-              className="block rounded-xl border shadow-card hover:shadow-card-hover transition-shadow p-4"
-            >
-              <div className="flex items-center justify-between">
-                <div className="text-lg font-semibold">{s.title}</div>
-                <span className={`text-xs px-2 py-1 rounded ${badgeClass}`}>{badge}</span>
-              </div>
-              <p className="mt-1 text-sm text-slate-600">{s.desc}</p>
-              <div className="mt-3 text-xs text-slate-500">
-                {st?.updated_at ? (
-                  <>Updated: {new Date(st.updated_at).toLocaleString()}</>
-                ) : (
-                  <>No data yet</>
-                )}
-              </div>
-            </Link>
-          );
-        })}
+      {/* KAARDID */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {SECTIONS.map((s) => (
+          <Card key={s.code} className="flex items-stretch justify-between">
+            <div className="flex-1">
+              <CardHeader
+                title={
+                  <div className="flex items-center gap-2">
+                    <span>{s.title}</span>
+                    {s.note ? <span className="q-badge">{s.note}</span> : null}
+                  </div>
+                }
+              />
+              <CardBody>
+                <div className="text-sm text-[--color-text-muted]">Code: {s.code}</div>
+              </CardBody>
+            </div>
+            <div className="p-4">
+              <Button href={s.href} size="sm" variant="primary">Open</Button>
+            </div>
+          </Card>
+        ))}
       </div>
     </div>
   );

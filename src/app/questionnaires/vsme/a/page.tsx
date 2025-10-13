@@ -1,151 +1,214 @@
+// src/app/questionnaires/vsme/a/page.tsx
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import VsmeForm, { type VsmeSection } from '../../../../components/VsmeForm';
-import LoadingButton from '../../../../components/LoadingButton';
-import { getProjectId, onProjectChange } from '../../../../lib/project';
-import { logAudit } from '../../../../lib/audit';
-import { useDebouncedEffect } from '../../../../lib/useDebouncedEffect';
-import { toast } from '../../../../lib/toast';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+
+import Input from '@/components/ui/Input';
+import Label from '@/components/ui/Label';
+import Textarea from '@/components/ui/Textarea';
+import Button from '@/components/ui/Button';
 
 type AForm = {
-  legal_name?: string | null;
-  country?: string | null;
+  legal_name?: string;
+  country?: string;
   employees?: number | null;
-  sector?: string | null;
-  notes?: string | null;
+  sector?: string;
+  notes?: string;
 };
 
-const SECTION_DEF: VsmeSection = {
-  code: 'a',
-  fields: [
-    { key: 'legal_name', label: 'Legal name', type: 'text', placeholder: 'e.g. Annika OÜ', colSpan: 12 },
-    { key: 'country', label: 'Country', type: 'text', placeholder: 'e.g. EE', colSpan: 6 },
-    { key: 'employees', label: 'Employees (FTE)', type: 'number', placeholder: 'e.g. 12', colSpan: 6 },
-    { key: 'sector', label: 'Sector', type: 'text', placeholder: 'e.g. Retail', colSpan: 12 },
-    { key: 'notes', label: 'Notes', type: 'textarea', placeholder: 'Optional…', colSpan: 12 },
-  ],
-};
+const SECTION_CODE = 'A';
 
-export default function APage() {
-  const [project, setProject] = useState<string>(getProjectId());
+function lsKey(project: string) {
+  return `vsme:${SECTION_CODE}:${project}`;
+}
+
+export default function VsmeASectionPage() {
+  const sp = useSearchParams();
+  const project = sp.get('project') ?? 'client-test1';
+
   const [form, setForm] = useState<AForm>({});
   const [busy, setBusy] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-  const [autosave, setAutosave] = useState(true);
-  const dirtyRef = useRef(false);
-  const initialRef = useRef<string>(JSON.stringify(form));
+  const [msg, setMsg] = useState<string>('');
+  const [autosave, setAutosave] = useState<boolean>(true);
 
-  useEffect(() => onProjectChange((id) => setProject(id)), []);
+  const initialLoadRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Lae esmane sisu localStorage'ist (MVP)
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setBusy(true);
-        const u = new URL('/api/cdm/get', window.location.origin);
-        u.searchParams.set('projectId', project);
-        u.searchParams.set('sectionCode', SECTION_DEF.code);
-        const r = await fetch(u.toString(), { cache: 'no-store' });
-        const j = await r.json();
-        if (!cancelled && j?.ok) {
-          const next = j.data ?? {};
-          setForm(next);
-          initialRef.current = JSON.stringify(next);
-          dirtyRef.current = false;
-        }
-      } catch {} finally {
-        if (!cancelled) setBusy(false);
+    if (initialLoadRef.current) return;
+    initialLoadRef.current = true;
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem(lsKey(project)) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw) as { form: AForm; savedAt?: string };
+        setForm(parsed?.form ?? {});
+        setLastSavedAt(parsed?.savedAt ?? null);
       }
-    })();
-    return () => { cancelled = true; };
+    } catch {
+      // ignore
+    }
   }, [project]);
 
+  // Debounce autosave
   useEffect(() => {
-    const onLeave = (e: BeforeUnloadEvent) => {
-      if (dirtyRef.current) { e.preventDefault(); e.returnValue = ''; }
+    if (!autosave) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      void saveLocal('draft', false);
+    }, 800);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-    window.addEventListener('beforeunload', onLeave);
-    return () => window.removeEventListener('beforeunload', onLeave);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form, autosave, project]);
 
-  function onFormChange(next: AForm, key?: string, value?: any) {
-    setForm(next);
-    dirtyRef.current = JSON.stringify(next) !== initialRef.current;
-    if (key) {
-      logAudit({ project_id: project, type: 'field', ctx: 'vsme:a', data: { key, value } })
-        .catch(() => {});
-    }
-  }
-
-  useDebouncedEffect(() => {
-    if (!autosave || !dirtyRef.current) return;
-    (async () => {
-      try {
-        const r = await fetch('/api/cdm/upsert', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ projectId: project, sectionCode: 'a', draft: form }),
-        });
-        const j = await r.json();
-        if (j?.ok) {
-          initialRef.current = JSON.stringify(form);
-          dirtyRef.current = false;
-          setLastSavedAt(new Date().toISOString());
-          toast('Autosaved ✔', 'success', 1200);
-        }
-      } catch {}
-    })();
-  }, [form, project, autosave], 1200);
-
-  async function save(mode: 'draft' | 'final') {
+  async function saveLocal(status: 'draft' | 'final', withAudit = true) {
+    setBusy(true);
+    setMsg('');
     try {
-      setBusy(true);
-      await logAudit({ project_id: project, type: 'save', ctx: 'vsme:a', data: { mode } });
-      const r = await fetch('/api/cdm/upsert', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          projectId: project,
-          sectionCode: 'a',
-          draft: mode === 'draft' ? form : undefined,
-          cdm: mode === 'final' ? form : undefined,
-        }),
-      });
-      const j = await r.json();
-      if (!j?.ok) throw new Error(j?.error || 'Save failed');
-      initialRef.current = JSON.stringify(form);
-      dirtyRef.current = false;
-      setLastSavedAt(new Date().toISOString());
-      toast(mode === 'final' ? 'Final saved ✔' : 'Draft saved ✔', 'success');
+      const savedAt = new Date().toISOString();
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(lsKey(project), JSON.stringify({ form, savedAt, status }));
+      }
+      setLastSavedAt(savedAt);
+
+      // logi auditisse (MVP: /api/audit/add)
+      if (withAudit) {
+        await fetch('/api/audit/add', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            project,
+            action: 'vsme.save',
+            details: { section: SECTION_CODE, status, savedAt, keys: Object.keys(form ?? {}) },
+          }),
+        }).catch(() => {});
+      }
     } catch (e: any) {
-      toast('Save failed: ' + (e?.message ?? 'error'), 'error');
-      await logAudit({ project_id: project, type: 'error', ctx: 'vsme:a', data: { message: String(e?.message || e) } });
+      setMsg(e?.message ?? 'Save failed');
     } finally {
       setBusy(false);
     }
   }
 
-  const savedInfo = useMemo(() => lastSavedAt ? `Saved · ${new Date(lastSavedAt).toLocaleTimeString()}` : 'Not saved yet', [lastSavedAt]);
+  function clearForm() {
+    setForm({});
+    setMsg('');
+    setLastSavedAt(null);
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(lsKey(project));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  const savedInfo = useMemo(() => {
+    if (!lastSavedAt) return 'Not saved yet';
+    try {
+      const d = new Date(lastSavedAt);
+      return `Saved: ${d.toLocaleString()}`;
+    } catch {
+      return `Saved: ${lastSavedAt}`;
+    }
+  }, [lastSavedAt]);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Section A</h1>
-        <div className="flex items-center gap-4">
-          <label className="text-sm inline-flex items-center gap-2">
-            <input type="checkbox" checked={autosave} onChange={(e) => setAutosave(e.target.checked)} />
+    <div className="space-y-6">
+      <header className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">VSME — Section {SECTION_CODE}</h1>
+          <p className="text-sm text-[--color-text-muted]">
+            Project: <span className="font-mono">{project}</span>
+          </p>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-[--color-text-muted]">
+          <label className="inline-flex items-center gap-2">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-[--color-border] text-brand-600 focus:ring-brand-200"
+              checked={autosave}
+              onChange={(e) => setAutosave(e.target.checked)}
+            />
             Autosave
           </label>
-          <span className="text-sm text-slate-600">{savedInfo}</span>
+          <span className="opacity-80">{savedInfo}</span>
+        </div>
+      </header>
+
+      {msg && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          {msg}
+        </div>
+      )}
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <div>
+          <Label>Legal name</Label>
+          <Input
+            placeholder="e.g. Annika OÜ"
+            value={form.legal_name ?? ''}
+            onChange={(e) => setForm((f) => ({ ...f, legal_name: e.target.value }))}
+          />
+        </div>
+
+        <div>
+          <Label>Country</Label>
+          <Input
+            placeholder="e.g. EE"
+            value={form.country ?? ''}
+            onChange={(e) => setForm((f) => ({ ...f, country: e.target.value }))}
+          />
+        </div>
+
+        <div>
+          <Label>Employees (FTE)</Label>
+          <Input
+            type="number"
+            placeholder="e.g. 12"
+            value={typeof form.employees === 'number' ? String(form.employees) : ''}
+            onChange={(e) =>
+              setForm((f) => ({
+                ...f,
+                employees: e.target.value ? Number(e.target.value) : null,
+              }))
+            }
+          />
+        </div>
+
+        <div>
+          <Label>Sector</Label>
+          <Input
+            placeholder="e.g. Retail"
+            value={form.sector ?? ''}
+            onChange={(e) => setForm((f) => ({ ...f, sector: e.target.value }))}
+          />
+        </div>
+
+        <div className="sm:col-span-2">
+          <Label>Notes</Label>
+          <Textarea
+            placeholder="Optional…"
+            value={form.notes ?? ''}
+            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+          />
         </div>
       </div>
 
-      <VsmeForm section={SECTION_DEF} value={form} onChange={onFormChange} disabled={busy} />
-
-      <div className="mt-4 flex gap-3">
-        <LoadingButton variant="ghost" loading={busy} onClick={() => save('draft')}>Save draft</LoadingButton>
-        <LoadingButton variant="primary" loading={busy} onClick={() => save('final')}>Save final</LoadingButton>
+      <div className="flex flex-wrap gap-3">
+        <Button onClick={() => saveLocal('draft') } className="min-w-[120px]" variant="primary">
+          {busy ? 'Saving…' : 'Save draft'}
+        </Button>
+        <Button onClick={() => saveLocal('final')} className="min-w-[120px]" variant="primary">
+          {busy ? 'Saving…' : 'Save final'}
+        </Button>
+        <Button onClick={clearForm} variant="secondary">
+          Clear
+        </Button>
       </div>
     </div>
   );

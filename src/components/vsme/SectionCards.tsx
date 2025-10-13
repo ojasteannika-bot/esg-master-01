@@ -10,7 +10,7 @@ type Props = {
 export default function SectionCards({ project, items }: Props) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {items.map((it) => (
+      {(items ?? []).map((it) => (
         <div key={it.code} className="border rounded p-4">
           <div className="text-sm opacity-60 mb-2">Code: {it.code}</div>
           <div className="font-medium mb-4">{it.title}</div>

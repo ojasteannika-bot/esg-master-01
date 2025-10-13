@@ -60,7 +60,7 @@ export default function ToastHost() {
     <div className="pointer-events-none fixed inset-x-0 top-4 z-[1000] flex justify-center">
       <div className="w-full max-w-xl px-4">
         <div className="space-y-2">
-          {items.map((t) => (
+          {(items ?? []).map((t) => (
             <div
               key={t.id}
               className={`pointer-events-auto rounded-lg px-4 py-3 shadow-lg ${classFor(

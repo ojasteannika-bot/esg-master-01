@@ -186,7 +186,7 @@ export default function SectionForm({ section, initialProjectId }: Props) {
       </div>
 
       <div className="space-y-5">
-        {items.map((it, idx) => {
+        {(items ?? []).map((it, idx) => {
           const key = it.code || it.id || `item_${idx}`;
           const label = it.title || it.label || key;
           const t = inferType(it);

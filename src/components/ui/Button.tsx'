@@ -1,0 +1,38 @@
+// src/components/ui/Button.tsx
+import * as React from "react";
+import Link from "next/link";
+
+type ButtonBaseProps = {
+  className?: string;
+  children: React.ReactNode;
+};
+
+type ButtonAsAnchor = ButtonBaseProps & { href: string } & Omit<
+  React.ComponentProps<"a">,
+  "className" | "children" | "href"
+>;
+
+type ButtonAsButton = ButtonBaseProps & React.ComponentProps<"button">;
+
+export default function Button(props: ButtonAsAnchor | ButtonAsButton) {
+  const base =
+    "inline-flex items-center justify-center rounded-md border border-gray-300 " +
+    "bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm " +
+    "hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2";
+
+  if ("href" in props) {
+    const { className = "", children, href, ...rest } = props;
+    return (
+      <Link href={href} className={`${base} ${className}`} {...rest}>
+        {children}
+      </Link>
+    );
+  }
+
+  const { className = "", children, ...restBtn } = props;
+  return (
+    <button className={`${base} ${className}`} {...restBtn}>
+      {children}
+    </button>
+  );
+}

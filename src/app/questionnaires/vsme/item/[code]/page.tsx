@@ -1,398 +1,268 @@
-'use client';
+"use client";
 
-import * as React from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import StatusPill from '@/components/StatusPill';
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams, useParams, useRouter } from "next/navigation";
+import { debounce, saveItemJson } from "@/lib/cdm/client";
 
-type ItemStatus = 'not_started' | 'partial' | 'ready';
-
+// NB! lihtne tüüp-mudel, sobib sinu VSME stubiga
 type VsmeItem = {
-  code: string;
+  code: string;       // nt "B1-1"
   title: string;
-  description?: string;
-  level?: 'basic' | 'comprehensive';
-  fields: Array<{
-    id: string;
-    label: string;
-    type: 'text' | 'number' | 'select' | 'date' | 'file' | 'textarea';
-    required?: boolean;
-    options?: string[];
-  }>;
+  type: "select" | "boolean" | "number" | "text";
+  options?: Array<{ value: string; label: string }>;
+  sectionCode?: string; // nt "B1"
 };
 
-type LoadResponse = {
-  item: {
-    code: string;
-    status: ItemStatus;
-    draft_text?: string;
-    owner_id?: string | null;
-    due_date?: string | null;
-    level?: 'basic' | 'comprehensive';
-    values?: Record<string, any>;
+// Kui sul on serverist reaalne item loader, võid selle asendada.
+// MVP: loeme koodist “mock” välja (või kasuta oma varasemat schema/items abi).
+async function loadItem(code: string): Promise<VsmeItem> {
+  // Minimock: oletame esimese B1-1 on select, B1-2 boolean, B1-3 text
+  if (code === "B1-1") {
+    return {
+      code,
+      title: "Which VSME modules are included?",
+      type: "select",
+      options: [
+        { value: "A", label: "Module A" },
+        { value: "B", label: "Module B" },
+        { value: "A,B", label: "Both A and B" },
+      ],
+      sectionCode: "B1",
+    };
+  }
+  if (code === "B1-2") {
+    return {
+      code,
+      title: "Individual or consolidated?",
+      type: "boolean",
+      sectionCode: "B1",
+    };
+  }
+  return {
+    code,
+    title: "Reporting perimeter notes",
+    type: "text",
+    sectionCode: "B1",
   };
-  schema: VsmeItem;
-  evidence: Array<{
-    id: string;
-    kind: 'file' | 'url';
-    path_or_url: string;
-    tags?: string[];
-  }>;
-  audit: Array<{
-    id: string;
-    action: string;
-    actor_id: string;
-    ts: string;
-  }>;
-  sectionStats?: {
-    completed: number;
-    total: number;
-  };
-};
-
-const cx = (...cls: (string | false | null | undefined)[]) =>
-  cls.filter(Boolean).join(' ');
-
-function ProgressMini({ stats }: { stats?: LoadResponse['sectionStats'] }) {
-  const c = stats?.completed ?? 0;
-  const t = stats?.total ?? 0;
-  return <span className="text-xs text-gray-500">{c}/{t} completed</span>;
 }
 
 export default function VsmeItemPage() {
-  const params = useParams<{ code: string }>();
-  const search = useSearchParams();
   const router = useRouter();
+  const sp = useSearchParams();
+  const params = useParams<{ code: string }>();
 
-  const project = search.get('project') || '';
+  const project = sp?.get("project") || "client-test1";
+  const code = String(params?.code || "");
 
-  const [data, setData] = React.useState<LoadResponse | null>(null);
-  const [values, setValues] = React.useState<Record<string, any>>({});
-  const [status, setStatus] = React.useState<ItemStatus>('not_started');
-  const [saving, setSaving] = React.useState<'idle' | 'draft' | 'final'>('idle');
-  const [error, setError] = React.useState<string | null>(null);
-  const [debounceKey, setDebounceKey] = React.useState<number>(0);
+  const [item, setItem] = useState<VsmeItem | null>(null);
+  const [form, setForm] = useState<Record<string, any>>({});
+  const [na, setNa] = useState<boolean>(false);
+  const [saving, setSaving] = useState<"idle" | "saving" | "ok" | "err">("idle");
 
-  // ---- LOAD -----------------------------------------------------------------
-  React.useEffect(() => {
-    let aborted = false;
-    async function load() {
-      setError(null);
-      try {
-        const url = `/api/vsme/load?project=${encodeURIComponent(
-          project
-        )}&code=${encodeURIComponent(params.code)}`;
-        const res = await fetch(url, { method: 'GET', credentials: 'include' });
-        if (!res.ok) throw new Error(`Load failed: ${res.status}`);
-        const json: LoadResponse = await res.json();
-        if (aborted) return;
-        setData(json);
-        setValues(json.item.values || {});
-        setStatus(json.item.status || 'not_started');
-      } catch (e: any) {
-        if (!aborted) setError(e.message || 'Load error');
-      }
-    }
-    if (project && params.code) load();
-    return () => {
-      aborted = true;
-    };
-  }, [project, params.code]);
+  // lae item meta
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      const it = await loadItem(code);
+      if (!on) return;
+      setItem(it);
+      // algväärtused (kui tahad, loe siit ka varasemaid vastuseid failist)
+      setForm({});
+      setNa(false);
+    })().catch(() => {});
+    return () => { on = false; };
+  }, [code]);
 
-  // ---- AUTOSAVE (DRAFT) -----------------------------------------------------
-  React.useEffect(() => {
-    if (!data) return;
-    const handle = setTimeout(() => {
-      if (saving === 'final') return;
-      void savePatch('draft', false);
-    }, 800);
-    return () => clearTimeout(handle);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [values, status, debounceKey, data?.item.code, project]);
+  // debounced autosave
+  const debouncedSave = useMemo(
+    () =>
+      debounce(async (payload: { project: string; code: string; answers: any }) => {
+        try {
+          setSaving("saving");
+          await saveItemJson({ ...payload, status: "draft" });
+          setSaving("ok");
+        } catch {
+          setSaving("err");
+        }
+      }, 600),
+    []
+  );
 
-  async function savePatch(mode: 'draft' | 'final', toast = true) {
-    if (!data) return;
+  // muutuste peale – autosave (draft)
+  useEffect(() => {
+    if (!item) return;
+    const answers = { ...form, ...(na ? { _na: true } : {}) };
+    debouncedSave({ project, code: item.code, answers });
+  }, [project, item, form, na, debouncedSave]);
+
+  // UI muutjad
+  function setField(name: string, value: any) {
+    setForm((prev) => ({ ...prev, [name]: value }));
+  }
+
+  async function onSaveDraft() {
+    if (!item) return;
     try {
-      setSaving(mode);
-      const res = await fetch('/api/vsme/save', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          project,
-          code: data.item.code,
-          patch: {
-            values,
-            status: mode === 'final' ? 'ready' : status,
-          },
-          finalize: mode === 'final',
-        }),
+      setSaving("saving");
+      await saveItemJson({
+        project,
+        code: item.code,
+        status: "draft",
+        answers: { ...form, ...(na ? { _na: true } : {}) },
       });
-      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
-      const updated: { status: ItemStatus } = await res.json();
-      setStatus(updated.status);
-      if (toast) console.info(mode === 'final' ? 'Saved as final' : 'Draft saved');
-    } catch (e: any) {
-      setError(e.message || 'Save error');
-    } finally {
-      setSaving('idle');
+      setSaving("ok");
+    } catch {
+      setSaving("err");
     }
   }
 
-  function onChangeField(id: string, v: any) {
-    setValues((prev) => ({ ...prev, [id]: v }));
-    setDebounceKey((k) => k + 1);
-    if (status === 'not_started') setStatus('partial');
+  async function onMarkFinal() {
+    if (!item) return;
+    try {
+      setSaving("saving");
+      await saveItemJson({
+        project,
+        code: item.code,
+        status: "final",
+        answers: { ...form, ...(na ? { _na: true } : {}) },
+      });
+      setSaving("ok");
+      // kui naased sektsiooni, näeksid värsket progressi
+      router.push(`/questionnaires/vsme/${item.sectionCode}?project=${encodeURIComponent(project)}`);
+    } catch {
+      setSaving("err");
+    }
   }
 
-  function Field({ f }: { f: VsmeItem['fields'][number] }) {
-    const common =
-      'block w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-900/10';
-    const val = values?.[f.id] ?? '';
+  async function onReset() {
+    if (!item) return;
+    setForm({});
+    setNa(false);
+    try {
+      setSaving("saving");
+      await saveItemJson({
+        project,
+        code: item.code,
+        status: "draft",
+        answers: {},
+      });
+      setSaving("ok");
+    } catch {
+      setSaving("err");
+    }
+  }
 
-    if (f.type === 'textarea') {
-      return (
-        <textarea
-          className={common}
-          rows={6}
-          placeholder={f.label}
-          value={val}
-          onChange={(e) => onChangeField(f.id, e.target.value)}
-        />
-      );
-    }
-    if (f.type === 'select') {
-      return (
-        <select
-          className={common}
-          value={val}
-          onChange={(e) => onChangeField(f.id, e.target.value)}
-        >
-          <option value="">— Select —</option>
-          {(f.options || []).map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
-      );
-    }
-    if (f.type === 'date') {
-      return (
-        <input
-          type="date"
-          className={common}
-          value={val}
-          onChange={(e) => onChangeField(f.id, e.target.value)}
-        />
-      );
-    }
-    if (f.type === 'number') {
-      return (
-        <input
-          type="number"
-          className={common}
-          value={val}
-          onChange={(e) =>
-            onChangeField(f.id, e.target.value === '' ? '' : e.target.valueAsNumber)
-          }
-        />
-      );
-    }
-    // 'text' | 'file' (file sisuhaldus on eraldi Evidence paneelis)
+  if (!item) {
     return (
-      <input
-        type="text"
-        className={common}
-        placeholder={f.label}
-        value={val}
-        onChange={(e) => onChangeField(f.id, e.target.value)}
-      />
+      <main style={{ maxWidth: 960, margin: "0 auto", padding: 24 }}>
+        <h1 style={{ fontSize: 24, marginBottom: 16 }}>Loading…</h1>
+      </main>
     );
   }
-
-  // ---- RENDER ---------------------------------------------------------------
-  if (!project) {
-    return (
-      <div className="mx-auto max-w-5xl p-6">
-        <div className="rounded-md border border-amber-300 bg-amber-50 p-4">
-          <p className="text-sm text-amber-800">
-            Puudub <code>project</code> query param. Ava leht näiteks:
-            <br />
-            <code>/questionnaires/vsme/item/{params.code}?project=client-test1</code>
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="mx-auto max-w-5xl p-6">
-        <div className="rounded-md border border-rose-300 bg-rose-50 p-4">
-          <p className="text-sm text-rose-800">Error: {error}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return (
-      <div className="mx-auto max-w-5xl p-6">
-        <div className="h-6 w-48 animate-pulse rounded bg-gray-200 mb-4" />
-        <div className="h-4 w-80 animate-pulse rounded bg-gray-200 mb-8" />
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-10 animate-pulse rounded bg-gray-100" />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  const { schema, evidence, audit, sectionStats } = data;
 
   return (
-    <div className="mx-auto max-w-5xl p-6">
-      {/* Header */}
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-lg font-semibold tracking-tight">
-              {schema.code} — {schema.title}
-            </h1>
-            <StatusPill status={status} />
-          </div>
-          <div className="mt-1 flex items-center gap-3">
-            <span
-              className={cx(
-                'inline-flex items-center rounded-full px-2 py-1 text-xs font-medium',
-                schema.level === 'basic'
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'bg-purple-50 text-purple-700'
-              )}
-            >
-              {schema.level === 'basic' ? 'Basic' : 'Comprehensive'}
-            </span>
-            <ProgressMini stats={sectionStats} />
-          </div>
-          {schema.description && (
-            <p className="mt-2 text-sm text-gray-600">{schema.description}</p>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            disabled={saving !== 'idle'}
-            onClick={() => savePatch('draft')}
-            className={cx(
-              'inline-flex items-center rounded-md border px-3 py-2 text-sm font-medium',
-              'border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50'
-            )}
-          >
-            {saving === 'draft' ? 'Saving…' : 'Save draft'}
-          </button>
-          <button
-            disabled={saving !== 'idle'}
-            onClick={() => savePatch('final')}
-            className={cx(
-              'inline-flex items-center rounded-md px-3 py-2 text-sm font-medium text-white',
-              'bg-gray-900 hover:bg-black disabled:opacity-50'
-            )}
-          >
-            {saving === 'final' ? 'Finalizing…' : 'Save final'}
-          </button>
+    <main style={{ maxWidth: 960, margin: "0 auto", padding: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+        <h1 style={{ fontSize: 24, marginBottom: 8 }}>
+          {item.code} — {item.title}
+        </h1>
+        <div style={{ fontSize: 12, color: "#666" }}>
+          {saving === "saving" ? "Saving…" : saving === "ok" ? "Saved" : saving === "err" ? "Save failed" : ""}
         </div>
       </div>
 
-      {/* Body */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Form */}
-        <div className="lg:col-span-2 space-y-5">
-          {schema.fields.map((f) => (
-            <div key={f.id}>
-              <label className="mb-1 block text-sm font-medium text-gray-800">
-                {f.label}
-                {f.required ? ' *' : ''}
-              </label>
-              <Field f={f} />
-              {f.type === 'file' && (
-                <p className="mt-1 text-xs text-gray-500">
-                  Failid on hallatavad parempoolses Evidence paneelis.
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
+      {/* Not applicable */}
+      <label style={{ display: "inline-flex", gap: 8, alignItems: "center", margin: "8px 0 16px" }}>
+        <input type="checkbox" checked={na} onChange={(e) => setNa(e.target.checked)} />
+        Not applicable
+      </label>
 
-        {/* Right panel */}
-        <aside className="lg:col-span-1 space-y-4">
-          <div className="rounded-lg border border-gray-200 p-4">
-            <div className="mb-2 text-sm font-semibold">Help (“?”)</div>
-            <p className="text-sm text-gray-600">
-              Kureeritud abi + AI assist (no-fabricate): selgitused, checklist ja
-              näidissõnastus.
-            </p>
-            <button
-              onClick={() => console.info('Open HelpPopover')}
-              className="mt-2 text-xs underline underline-offset-2 text-gray-700"
+      {/* Vormi väli(d) – MVP: üks põhi-väli nimega q1 */}
+      <div style={{ border: "1px solid #e5e7eb", borderRadius: 10, padding: 16 }}>
+        {item.type === "select" && (
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Select one:</div>
+            <select
+              value={form.q1 ?? ""}
+              onChange={(e) => setField("q1", e.target.value)}
+              style={{ padding: 8, width: "100%", maxWidth: 420 }}
             >
-              Open helper
-            </button>
-          </div>
-
-          <div className="rounded-lg border border-gray-200 p-4">
-            <div className="mb-2 text-sm font-semibold">Evidence</div>
-            <ul className="space-y-2">
-              {evidence.length === 0 && (
-                <li className="text-sm text-gray-500">No evidence yet.</li>
-              )}
-              {evidence.map((ev) => (
-                <li key={ev.id} className="text-sm">
-                  • {ev.kind.toUpperCase()} – {ev.path_or_url}
-                </li>
+              <option value="" />
+              {(item.options ?? []).map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
               ))}
-            </ul>
-            <button
-              onClick={() =>
-                router.push(
-                  `/evidence/upload?project=${encodeURIComponent(
-                    project
-                  )}&code=${encodeURIComponent(schema.code)}`
-                )
-              }
-              className="mt-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs hover:bg-gray-50"
-            >
-              Upload / link evidence
-            </button>
+            </select>
           </div>
+        )}
 
-          <div className="rounded-lg border border-gray-200 p-4">
-            <div className="mb-2 text-sm font-semibold">Recent activity</div>
-            <ul className="space-y-1">
-              {audit.slice(0, 5).map((a) => (
-                <li key={a.id} className="text-xs text-gray-600">
-                  {new Date(a.ts).toLocaleString()} — {a.action}
-                </li>
-              ))}
-              {audit.length === 0 && (
-                <li className="text-xs text-gray-500">No changes yet.</li>
-              )}
-            </ul>
-            <button
-              onClick={() =>
-                router.push(
-                  `/audit?project=${encodeURIComponent(
-                    project
-                  )}&code=${encodeURIComponent(schema.code)}`
-                )
-              }
-              className="mt-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs hover:bg-gray-50"
-            >
-              Open audit log
-            </button>
+        {item.type === "boolean" && (
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Choose:</div>
+            <label style={{ display: "inline-flex", gap: 6, marginRight: 12 }}>
+              <input
+                type="radio"
+                name="q1b"
+                checked={form.q1 === true}
+                onChange={() => setField("q1", true)}
+              />
+              Yes
+            </label>
+            <label style={{ display: "inline-flex", gap: 6 }}>
+              <input
+                type="radio"
+                name="q1b"
+                checked={form.q1 === false}
+                onChange={() => setField("q1", false)}
+              />
+              No
+            </label>
           </div>
-        </aside>
+        )}
+
+        {item.type === "number" && (
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Enter a number:</div>
+            <input
+              type="number"
+              value={form.q1 ?? ""}
+              onChange={(e) => setField("q1", e.target.value === "" ? "" : Number(e.target.value))}
+              style={{ padding: 8, width: 200 }}
+            />
+          </div>
+        )}
+
+        {item.type === "text" && (
+          <div>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Notes:</div>
+            <textarea
+              rows={6}
+              value={form.q1 ?? ""}
+              onChange={(e) => setField("q1", e.target.value)}
+              style={{ padding: 8, width: "100%", maxWidth: 680 }}
+            />
+          </div>
+        )}
       </div>
-    </div>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+        <button onClick={onSaveDraft} style={{ padding: "8px 12px", border: "1px solid #d1d5db", borderRadius: 8 }}>
+          Save draft
+        </button>
+        <button
+          onClick={onMarkFinal}
+          style={{ padding: "8px 12px", border: "1px solid #111827", background: "#111827", color: "white", borderRadius: 8 }}
+        >
+          Mark final
+        </button>
+        <button
+          onClick={onReset}
+          style={{ padding: "8px 12px", border: "1px solid #ef4444", color: "#ef4444", borderRadius: 8 }}
+        >
+          Reset
+        </button>
+      </div>
+    </main>
   );
 }

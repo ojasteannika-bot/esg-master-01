@@ -1,21 +1,17 @@
-// src/app/layout.tsx
-import type { Metadata } from 'next';
-import './globals.css';
-import Nav from '@/components/Nav';
+import type { Metadata } from "next";
+import "./globals.css";
+import { inter } from "./fonts";
 
 export const metadata: Metadata = {
-  title: 'ESG-MASTER-01',
-  description: 'ESGLITE-01 prototype',
+  title: { default: "ESG-MASTER-01", template: "%s – ESG-MASTER-01" },
+  description: "prototype",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="min-h-screen bg-white text-gray-900">
-        <Nav />
-        <main className="container mx-auto px-3 py-4">
-          {children}
-        </main>
+    <html lang="en" className={inter.variable}>
+      <body className="min-h-screen font-sans bg-[--color-surface-soft] text-[--color-text] antialiased">
+        <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
       </body>
     </html>
   );

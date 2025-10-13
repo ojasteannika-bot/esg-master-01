@@ -1,3 +1,4 @@
+import Link from "next/link";
 // src/app/questionnaires/esglite/nodes/page.tsx
 'use client';
 
