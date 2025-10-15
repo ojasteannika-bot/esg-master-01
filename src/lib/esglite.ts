@@ -1,10 +1,11 @@
-export type Section = { code: string; title: string };
-
-export const ESGLITE_SECTIONS: Section[] = [
+export const ESGLITE_SECTIONS = [
   { code: 'A1', title: 'Company basics (demo)' },
   { code: 'B',  title: 'Environmental (demo)' },
   { code: 'B1', title: 'Operational metrics (demo)' },
-];
-
-// ajutine alias, et vana kood ei kukuks (ESLITE vs ESGLITE)
-export const ESLITE_SECTIONS = ESGLITE_SECTIONS;
+] as const;
+export type SectionCode = typeof ESGLITE_SECTIONS[number]['code'];
+export const ESGLITE_ITEMS: Record<SectionCode, { code:string; title:string }[]> = {
+  A1: [{ code:'A1-01', title:'Company name' }],
+  B:  [{ code:'B-01',  title:'Energy' }],
+  B1: [{ code:'B1-01', title:'Employees' }],
+};

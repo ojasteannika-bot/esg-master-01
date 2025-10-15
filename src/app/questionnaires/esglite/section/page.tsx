@@ -1,29 +1,31 @@
-import { ESGLITE_SECTIONS } from '@/lib/esglite';
-import ProgressBadge from '@/components/ProgressBadge';
-type SP = { project?: string; };
-export default async function Page({ searchParams }: { searchParams: Promise<SP> }) {
-  const params = await searchParams;
-  const project = params?.project ?? 'client-XYZ';
-  const rows = await Promise.all(ESGLITE_SECTIONS.map(async s => {
-    const r = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL ?? ''}/api/cdm/progress?project=${encodeURIComponent(project)}&section=${s.code}`, { cache:'no-store' }).then(r=>r.json()).catch(()=>({completed:0,total:0}));
-    return { ...s, done: r.completed, total: r.total };
-  }));
+import { ESGLITE_ITEMS, ESGLITE_SECTIONS } from '@/lib/esglite';
+import Link from 'next/link';
+import { use } from 'react';
+type SP = { s?: string; project?: string };
+export default function Page({ searchParams }:{ searchParams: Promise<SP> }) {
+  const p = use(searchParams);
+  const project = p.project ?? 'client-XYZ';
+  const sc = (p.s ?? 'A1') as any;
+  const items = ESGLITE_ITEMS[sc] ?? [];
+  const sec = ESGLITE_SECTIONS.find(x=>x.code===sc);
   return (
     <div className="section">
-      <h1 className="h2" style={{marginBottom:16}}>Disclosures</h1>
-      <p style={{marginBottom:8}}>Project: <b>{project}</b></p>
+      <p><b>Project:</b> {project}</p>
+      <h2>Section {sec?.code ?? sc}</h2>
       <table className="table">
-        <thead><tr><th>Code</th><th>Title</th><th>Progress</th></tr></thead>
+        <thead><tr><th>Code</th><th>Title</th><th>Status</th><th></th></tr></thead>
         <tbody>
-          {rows.map(s=>(
-            <tr key={s.code}>
-              <td>{s.code}</td>
-              <td>{s.title}</td>
-              <td><ProgressBadge done={s.done} total={s.total}/></td>
+          {items.map(it=>(
+            <tr key={it.code}>
+              <td>{it.code}</td>
+              <td>{it.title}</td>
+              <td>Not started</td>
+              <td><Link className="btn btn-outline" href={`/esglite/item/${it.code}?project=${encodeURIComponent(project)}`}>Open</Link></td>
             </tr>
           ))}
         </tbody>
       </table>
+      <p><Link href="/questionnaires/esglite/nodes">&larr; Back</Link></p>
     </div>
   );
 }
