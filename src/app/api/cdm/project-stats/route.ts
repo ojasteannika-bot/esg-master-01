@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const section = url.searchParams.get('section') ?? 'A1';
   const project = url.searchParams.get('project') ?? 'client-XYZ';
-  return NextResponse.json({ project, section, completed: 0, total: 4 });
+  return NextResponse.json({ project, completed: 0 });
 }

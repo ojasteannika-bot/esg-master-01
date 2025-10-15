@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
+import { ESGLITE_SECTIONS } from '@/lib/esglite';
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const section = url.searchParams.get('section') ?? 'A1';
   const project = url.searchParams.get('project') ?? 'client-XYZ';
-  return NextResponse.json({ project, section, completed: 0, total: 4 });
+  const stats = ESGLITE_SECTIONS.map(s => ({ code: s.code, done: 0, total: 4 }));
+  return NextResponse.json({ project, stats });
 }
