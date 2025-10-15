@@ -1,48 +1,33 @@
-// src/components/ProgressRing.tsx
 'use client';
-
-import * as React from 'react';
-
-type Props = {
-  value: number;        // 0..100
-  size?: number;        // px
-  stroke?: number;      // px
-  label?: string;       // allteksti rida
-};
-
-export default function ProgressRing({ value, size = 96, stroke = 8, label }: Props) {
+export default function ProgressRing({
+  percent, size = 48, stroke = 6
+}: { percent:number; size?:number; stroke?:number }) {
   const r = (size - stroke) / 2;
-  const c = Math.PI * 2 * r;
-  const clamped = Math.max(0, Math.min(100, value));
-  const dash = (clamped / 100) * c;
+  const c = 2 * Math.PI * r;
+  const p = Math.max(0, Math.min(100, percent));
+  const dash = (p / 100) * c;
 
   return (
-    <div style={{ width: size, height: size }} className="relative">
-      <svg width={size} height={size} className="block">
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          stroke="#E5E7EB"
-          strokeWidth={stroke}
-          fill="none"
-        />
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          stroke="#111827"
-          strokeWidth={stroke}
-          fill="none"
-          strokeLinecap="round"
-          strokeDasharray={`${dash} ${c - dash}`}
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="text-lg font-semibold">{Math.round(clamped)}%</div>
-        {label && <div className="text-[10px] text-gray-500">{label}</div>}
-      </div>
-    </div>
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <defs>
+        <filter id="s" x="-50%" y="-50%" width="200%" height="200%">
+          <feDropShadow dx="0" dy="1" stdDeviation="1" floodOpacity=".12"/>
+        </filter>
+      </defs>
+      <circle cx={size/2} cy={size/2} r={r} stroke="#e5e7ef" strokeWidth={stroke} fill="#fff" />
+      <circle
+        cx={size/2} cy={size/2} r={r}
+        stroke={p===100 ? '#16a34a' : '#4f46e5'}
+        strokeWidth={stroke} fill="none"
+        strokeDasharray={`${dash} ${c - dash}`}
+        strokeLinecap="round"
+        transform={`rotate(-90 ${size/2} ${size/2})`}
+        style={{ filter:'url(#s)' }}
+      />
+      <text x="50%" y="50%" dominantBaseline="middle" textAnchor="middle"
+            fontSize={size*0.34} fontWeight={700} fill="#111827">
+        {Math.round(p)}%
+      </text>
+    </svg>
   );
 }

@@ -10,3 +10,5 @@ npm ci
 npm run dev
 ```
 
+
+See also: [CHANGELOG.md](CHANGELOG.md)

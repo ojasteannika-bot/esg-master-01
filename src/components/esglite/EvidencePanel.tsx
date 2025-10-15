@@ -137,7 +137,7 @@ export default function EvidencePanel({ project, code }: Props) {
         {!loading && items.length === 0 && (
           <p className="p-4 text-sm text-gray-500">No evidence yet.</p>
         )}
-        {items.map((it, idx) => {
+        {(items ?? []).map((it, idx) => {
           const host =
             it.url && /^https?:\/\//i.test(it.url) ? safeHost(it.url) : undefined;
           return (

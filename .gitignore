@@ -1,17 +1,11 @@
-# Node / Next.js
+# Node / Next
 node_modules/
 .next/
 out/
 dist/
-build/
-coverage/
-.vscode/
+*.log
+.env*
+# Local data
+.data/
+# OS junk
 .DS_Store
-.env
-.env.*
-.vercel/
-.turbo/
-pnpm-lock.yaml
-npm-debug.log*
-yarn-error.log*
-!.env.example
