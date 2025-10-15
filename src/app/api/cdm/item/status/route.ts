@@ -1,6 +1,6 @@
-// src/app/api/cdm/item/answers/route.ts
+// src/app/api/cdm/item/status/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { readAnswersFile, writeAnswersFile } from '@/lib/cdm/state.server';
+import { getItemStatus, setItemStatus, type ItemStatus } from '@/lib/cdm/state.server';
 
 function bad(msg: string, status = 400) {
   return NextResponse.json({ ok: false, error: msg }, { status });
@@ -12,11 +12,10 @@ export async function GET(req: NextRequest) {
     const project = searchParams.get('project') ?? '';
     const code = searchParams.get('code') ?? '';
     if (!project || !code) return bad('Missing project or code');
-
-    const data = await readAnswersFile(project, code);
-    return NextResponse.json({ ok: true, project, code, data });
-  } catch (err: any) {
-    return bad(err?.message || 'Failed to load answers', 500);
+    const status = await getItemStatus(project, code);
+    return NextResponse.json({ ok: true, project, code, status });
+  } catch (e:any) {
+    return bad(e?.message || 'Failed to load status', 500);
   }
 }
 
@@ -24,15 +23,14 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => null);
     if (!body) return bad('Invalid JSON body');
-
     const project = String(body.project ?? '');
     const code = String(body.code ?? '');
-    const data = body.data ?? {};
+    const status = String(body.status ?? 'draft') as ItemStatus;
     if (!project || !code) return bad('Missing project or code');
-
-    await writeAnswersFile(project, code, data);
-    return NextResponse.json({ ok: true, project, code, savedAt: Date.now() });
-  } catch (err: any) {
-    return bad(err?.message || 'Failed to save answers', 500);
+    if (status !== 'draft' && status !== 'final') return bad('Invalid status');
+    await setItemStatus(project, code, status);
+    return NextResponse.json({ ok: true, project, code, status, savedAt: Date.now() });
+  } catch (e:any) {
+    return bad(e?.message || 'Failed to save status', 500);
   }
 }

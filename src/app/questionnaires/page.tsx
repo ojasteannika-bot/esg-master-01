@@ -1,61 +1,43 @@
-import type { Metadata } from "next";
-import Link from "next/link";
-import { Card, CardBody, CardHeader } from "@/components/ui/Card";
-import Button from "@/components/ui/Button";
+import Link from 'next/link';
+import ProgressBadge from '@/components/ProgressBadge';
+import { getSections } from '@/lib/cdm/catalog';
 
-export const metadata: Metadata = {
-  title: "Questionnaires",
-  description: "List of available questionnaires/sections",
-};
+type Search = { project?: string };
 
-type Section = { code: string; title: string; href: string; note?: string };
+export default async function Page({
+  searchParams,
+}: {
+  searchParams?: Promise<Search> | Search;
+}) {
+  const sp =
+    (searchParams && 'then' in (searchParams as any)
+      ? await (searchParams as Promise<Search>)
+      : (searchParams as Search)) || {};
+  const project = sp.project ?? 'client-test1';
+  const sections = getSections();
 
-const SECTIONS: Section[] = [
-  { code: "A",  title: "Section A — Company basics",      href: "/questionnaires/vsme/a",  note: "DEMO" },
-  { code: "B",  title: "Section B — Environmental",       href: "/questionnaires/vsme/b",  note: "DEMO" },
-  { code: "B1", title: "Section B1 — Operational metrics",href: "/questionnaires/vsme/b1" },
-];
-
-export default function Page() {
   return (
-    <div className="space-y-4">
-      {/* UUS PÄIS (ainus) */}
-      <header
-        className="mb-6"
-        style={{ display: "flex", alignItems: "center", gap: 12, justifyContent: "space-between" }}
-      >
-        <div>
-          <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-0.02em" }}>Questionnaires</h1>
-          <p className="text-[--color-text-muted]" style={{ marginTop: 4 }}>
-            Choose a section to open its questionnaire.
-          </p>
-        </div>
-        <a href="/get-report" className="btn btn-primary">Generate report</a>
+    <main className="max-w-5xl mx-auto px-4 py-8">
+      <header className="mb-6" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <h1 style={{ fontSize: 28, fontWeight: 800, letterSpacing: '-0.02em' }}>Questionnaires</h1>
+        <Link href={`/get-report?project=${encodeURIComponent(project)}`} className="btn btn-primary">Generate report</Link>
       </header>
 
-      {/* KAARDID */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        {SECTIONS.map((s) => (
-          <Card key={s.code} className="flex items-stretch justify-between">
-            <div className="flex-1">
-              <CardHeader
-                title={
-                  <div className="flex items-center gap-2">
-                    <span>{s.title}</span>
-                    {s.note ? <span className="q-badge">{s.note}</span> : null}
-                  </div>
-                }
-              />
-              <CardBody>
-                <div className="text-sm text-[--color-text-muted]">Code: {s.code}</div>
-              </CardBody>
+      <div className="space-y-2">
+        {sections.map((s) => (
+          <div key={s.code} className="border border-[--color-border] rounded p-3" style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div>
+              <div className="font-semibold" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span>Section {s.code} — {s.title}</span>
+                {s.note ? <span className="q-badge">{s.note}</span> : null}
+                <ProgressBadge project={project} code={s.code} />
+              </div>
+              <div className="text-sm text-[--color-text-muted]">Code: {s.code}</div>
             </div>
-            <div className="p-4">
-              <Button href={s.href} size="sm" variant="primary">Open</Button>
-            </div>
-          </Card>
+            <Link className="btn btn-secondary" href={`/questionnaires/vsme/${s.code}?project=${encodeURIComponent(project)}`}>Open</Link>
+          </div>
         ))}
       </div>
-    </div>
+    </main>
   );
 }
